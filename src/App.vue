@@ -27,7 +27,7 @@ const {
       :moving="moving"
       :ready-count="readyCount"
       :supports-move="supportsMove"
-      @choose-folder="chooseFolder"
+      :on-choose-folder="chooseFolder"
       @scan="scan"
       @move="moveAll"
     />

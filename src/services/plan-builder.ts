@@ -1,4 +1,4 @@
-import { extensionOf, pad, parseMediaName, safeName, stemOf, SUBTITLE_EXTENSIONS, VIDEO_EXTENSIONS } from '../lib/media'
+import { extensionOf, pad, parseMediaName, safeName, SIDECAR_EXTENSIONS, stemOf, VIDEO_EXTENSIONS } from '../lib/media'
 import type { FoundFile, PlanRow } from '../types/plan'
 
 export function createPlan(files: FoundFile[]): PlanRow[] {
@@ -6,11 +6,11 @@ export function createPlan(files: FoundFile[]): PlanRow[] {
     .filter((file) => VIDEO_EXTENSIONS.has(extensionOf(file.name)))
     .map((source, index) => {
       const parsed = parseMediaName(source.name)
-      const subtitles = files.filter((other) => other.parent === source.parent && SUBTITLE_EXTENSIONS.has(extensionOf(other.name)) && stemOf(other.name) === stemOf(source.name))
+      const sidecars = files.filter((other) => other.parent === source.parent && SIDECAR_EXTENSIONS.has(extensionOf(other.name)) && stemOf(other.name) === stemOf(source.name))
       const row: PlanRow = {
         id: `${index}-${source.path}`,
         source,
-        subtitles,
+        sidecars,
         ...parsed,
         identityKey: `${parsed.kind}:${parsed.title.toLowerCase()}:${parsed.year ?? ''}`,
         candidates: [],

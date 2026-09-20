@@ -29,13 +29,14 @@ export function useMediaPlan(token: Ref<string>) {
       rootName.value = selected.name
       rows.value = []
       logs.value = []
-      scanState.value = ''
+      scanState.value = `Ordner „${selected.name}“ ausgewählt. Als Nächstes den Scan starten; es wurde noch nichts verändert.`
       moveState.value = ''
     } catch (error) {
       const exception = error as DOMException
       if (exception.name === 'AbortError') return
       if (exception.name === 'NotAllowedError') {
-        scanState.value = 'Der Browser hat den Ordnerzugriff abgelehnt. Bitte den Dialog über „Ordner auswählen“ erneut öffnen und Zugriff erlauben.'
+        const detail = exception.message ? ` (${exception.message})` : ''
+        scanState.value = `Der Browser hat den Ordnerzugriff abgelehnt${detail}. Bitte die App in einem eigenständigen Chromium-Tab öffnen und den Picker direkt über „Ordner auswählen“ auslösen.`
         return
       }
       if (exception.name === 'SecurityError') {
@@ -120,7 +121,7 @@ export function useMediaPlan(token: Ref<string>) {
     try {
       for (const row of candidates) {
         const destination = await getDestination(root.value, row.target)
-        const names = [destination.name, ...row.subtitles.map((file) => companionTargetName(row, file.name))]
+        const names = [destination.name, ...row.sidecars.map((file) => companionTargetName(row, file.name))]
         for (const name of names) if (await fileExists(destination.folder, name)) {
           row.state = 'conflict'
           row.error = `Zieldatei existiert bereits: ${name}`
@@ -135,7 +136,7 @@ export function useMediaPlan(token: Ref<string>) {
         try {
           const destination = await getDestination(root.value, row.target)
           await moveFile(row.source.handle, destination.folder, destination.name)
-          for (const subtitle of row.subtitles) await moveFile(subtitle.handle, destination.folder, companionTargetName(row, subtitle.name))
+          for (const sidecar of row.sidecars) await moveFile(sidecar.handle, destination.folder, companionTargetName(row, sidecar.name))
           row.state = 'done'
           logs.value.push({ source: row.source.path, target: row.target, result: 'Verschoben' })
         } catch (error) {

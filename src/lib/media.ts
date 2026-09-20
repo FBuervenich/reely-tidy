@@ -1,5 +1,10 @@
 export const VIDEO_EXTENSIONS = new Set(['mkv', 'mp4', 'avi', 'm4v', 'mov', 'wmv'])
 export const SUBTITLE_EXTENSIONS = new Set(['srt', 'ass', 'ssa', 'sub'])
+export const SIDECAR_EXTENSIONS = new Set([
+  ...SUBTITLE_EXTENSIONS,
+  'nfo',
+  'jpg', 'jpeg', 'png', 'webp', 'tbn'
+])
 
 export type MediaKind = 'movie' | 'series' | 'unknown'
 

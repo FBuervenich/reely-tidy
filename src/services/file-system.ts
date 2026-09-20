@@ -13,12 +13,9 @@ export async function pickSourceFolder(): Promise<FileSystemDirectoryHandle> {
     throw new Error('Dieser Browser unterstützt die File System Access API nicht. Bitte aktuelles Chromium oder Chrome verwenden.')
   }
 
-  const folder = await window.showDirectoryPicker({ mode: 'readwrite' })
-  const permission = await folder.requestPermission({ mode: 'readwrite' })
-  if (permission !== 'granted') {
-    throw new Error('Schreibzugriff wurde nicht erteilt. Bitte den Ordner erneut auswählen und den Schreibzugriff im Browser erlauben.')
-  }
-  return folder
+  // This call must happen synchronously from the native click handler. The picker itself
+  // requests write permission while that user activation is still active.
+  return window.showDirectoryPicker({ mode: 'readwrite' })
 }
 
 export async function listFiles(folder: FileSystemDirectoryHandle, prefix = ''): Promise<FoundFile[]> {

@@ -14,7 +14,7 @@ export interface FoundFile {
 export interface PlanRow {
   id: string
   source: FoundFile
-  subtitles: FoundFile[]
+  sidecars: FoundFile[]
   kind: MediaKind
   title: string
   year?: number
