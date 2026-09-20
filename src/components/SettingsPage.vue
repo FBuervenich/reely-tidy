@@ -109,7 +109,7 @@ function clearToken(): void {
         <h1>Configuration</h1>
         <p class="sub">All values are stored in this browser only.</p>
       </div>
-      <button @click="$emit('back')">← Back to ReelTidy</button>
+      <button @click="$emit('back')">← Back to ReelyTidy</button>
     </div>
     <form class="settings-form" @submit.prevent="save">
       <nav class="settings-tabs" aria-label="Settings sections">
@@ -155,7 +155,7 @@ function clearToken(): void {
           <legend>Naming presets</legend>
           <p>
             Build movie and show paths from as many subfolders and filename blocks as you need. The
-            “Standard” preset preserves ReelTidy’s original layout.
+            “Standard” preset preserves ReelyTidy’s original layout.
           </p>
           <p>
             <code>Scene tags</code> starts at a recognised technical marker (such as 2160p, WEB-DL,

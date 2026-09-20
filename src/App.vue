@@ -73,11 +73,11 @@ function saveSettings(settings: {
       <div>
         <p class="eyebrow">SIMPLE LOCAL MEDIA ORGANIZER</p>
         <div class="app-name">
-          <h1>ReelTidy</h1>
+          <h1>ReelyTidy</h1>
           <button
             class="info-button"
             type="button"
-            aria-label="About ReelTidy"
+            aria-label="About ReelyTidy"
             @click="aboutOpen = true"
           >
             i

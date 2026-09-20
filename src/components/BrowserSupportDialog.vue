@@ -9,13 +9,13 @@ defineProps<{ open: boolean; isFirefox: boolean }>()
       <h2>A Chromium browser is required</h2>
       <p v-if="isFirefox">
         Firefox is a great browser, but it does not currently support the File System Access API
-        required by ReelTidy.
+        required by ReelyTidy.
       </p>
       <p v-else>
-        This browser does not currently support the File System Access API required by ReelTidy.
+        This browser does not currently support the File System Access API required by ReelyTidy.
       </p>
       <p>
-        Please open ReelTidy in a current Chromium-based browser, such as
+        Please open ReelyTidy in a current Chromium-based browser, such as
         <b>Google Chrome, Microsoft Edge, Brave, Opera, Vivaldi, Arc, Helium,</b> or
         <b>Chromium</b>.
       </p>
