@@ -7,10 +7,10 @@ export function supportsNativeMove(): boolean {
 
 export async function pickSourceFolder(): Promise<FileSystemDirectoryHandle> {
   if (!window.isSecureContext) {
-    throw new Error('Ordnerzugriff ist nur über einen sicheren lokalen Ursprung möglich. Öffne die App über http://localhost, nicht über eine LAN-IP oder file://.')
+    throw new Error('Folder access requires a secure local origin. Open the app via http://localhost, not a LAN IP or file://.')
   }
   if (!('showDirectoryPicker' in window)) {
-    throw new Error('Dieser Browser unterstützt die File System Access API nicht. Bitte aktuelles Chromium oder Chrome verwenden.')
+    throw new Error('This browser does not support the File System Access API. Please use a current version of Chromium or Chrome.')
   }
 
   // This call must happen synchronously from the native click handler. The picker itself
@@ -18,12 +18,19 @@ export async function pickSourceFolder(): Promise<FileSystemDirectoryHandle> {
   return window.showDirectoryPicker({ mode: 'readwrite' })
 }
 
-export async function listFiles(folder: FileSystemDirectoryHandle, prefix = ''): Promise<FoundFile[]> {
+export interface ListFilesOptions {
+  ignoredRootDirectories?: string[]
+}
+
+export async function listFiles(folder: FileSystemDirectoryHandle, options: ListFilesOptions = {}, prefix = ''): Promise<FoundFile[]> {
   const files: FoundFile[] = []
+  const ignoredRootDirectories = new Set((options.ignoredRootDirectories ?? []).map((name) => name.trim().toLocaleLowerCase()).filter(Boolean))
   for await (const [, entry] of folder.entries()) {
     const path = prefix ? `${prefix}/${entry.name}` : entry.name
-    if (entry.kind === 'directory') files.push(...await listFiles(entry as FileSystemDirectoryHandle, path))
-    else files.push({ name: entry.name, path, handle: entry as FileSystemFileHandle, parent: folder })
+    const ignoredAtRoot = !prefix && entry.kind === 'directory' && ignoredRootDirectories.has(entry.name.toLocaleLowerCase())
+    if (entry.kind === 'directory') {
+      if (!ignoredAtRoot) files.push(...await listFiles(entry as FileSystemDirectoryHandle, options, path))
+    } else files.push({ name: entry.name, path, handle: entry as FileSystemFileHandle, parent: folder })
   }
   return files
 }
@@ -31,7 +38,7 @@ export async function listFiles(folder: FileSystemDirectoryHandle, prefix = ''):
 export async function getDestination(root: FileSystemDirectoryHandle, target: string): Promise<{ folder: FileSystemDirectoryHandle; name: string }> {
   const parts = target.split('/')
   const name = parts.pop()
-  if (!name) throw new Error('Ungültiger Zielpfad.')
+  if (!name) throw new Error('Invalid destination path.')
   let folder = root
   for (const part of parts) folder = await folder.getDirectoryHandle(part, { create: true })
   return { folder, name }
@@ -47,6 +54,6 @@ export async function fileExists(folder: FileSystemDirectoryHandle, name: string
 
 export async function moveFile(handle: FileSystemFileHandle, folder: FileSystemDirectoryHandle, name: string): Promise<void> {
   const move = (handle as FileSystemHandle).move
-  if (!move) throw new Error('Echtes Verschieben wird von diesem Chromium nicht unterstützt.')
+  if (!move) throw new Error('Native moving is not supported by this Chromium browser.')
   await move.call(handle, folder, name)
 }

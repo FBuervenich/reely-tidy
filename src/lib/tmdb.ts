@@ -7,6 +7,7 @@ export interface TmdbResult {
 }
 
 export interface TmdbEpisode { name?: string }
+interface TmdbDetail { title?: string; name?: string }
 
 const base = 'https://api.themoviedb.org/3'
 
@@ -15,7 +16,7 @@ async function request<T>(path: string, token: string, lang: 'de-DE' | 'en-US'):
   const response = await fetch(`${base}${path}${separator}language=${lang}`, {
     headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' }
   })
-  if (!response.ok) throw new Error(response.status === 401 ? 'TMDB-Token wurde abgelehnt.' : `TMDB antwortet mit HTTP ${response.status}.`)
+  if (!response.ok) throw new Error(response.status === 401 ? 'TMDB token was rejected.' : `TMDB responded with HTTP ${response.status}.`)
   return response.json() as Promise<T>
 }
 
@@ -37,10 +38,18 @@ export async function searchTmdb(type: 'movie' | 'tv', query: string, year: numb
 }
 
 export async function getEpisode(showId: number, season: number, episode: number, token: string): Promise<string | undefined> {
-  const de = await request<TmdbEpisode>(`/tv/${showId}/season/${season}/episode/${episode}`, token, 'de-DE')
-  if (de.name?.trim()) return de.name
-  const en = await request<TmdbEpisode>(`/tv/${showId}/season/${season}/episode/${episode}`, token, 'en-US')
-  return en.name?.trim()
+  const english = await request<TmdbEpisode>(`/tv/${showId}/season/${season}/episode/${episode}`, token, 'en-US')
+  if (english.name?.trim()) return english.name
+  const german = await request<TmdbEpisode>(`/tv/${showId}/season/${season}/episode/${episode}`, token, 'de-DE')
+  return german.name?.trim()
+}
+
+export async function getEnglishTitle(type: 'movie' | 'tv', id: number, token: string): Promise<string | undefined> {
+  const english = await request<TmdbDetail>(`/${type}/${id}`, token, 'en-US')
+  const title = type === 'movie' ? english.title : english.name
+  if (title?.trim()) return title
+  const german = await request<TmdbDetail>(`/${type}/${id}`, token, 'de-DE')
+  return type === 'movie' ? german.title?.trim() : german.name?.trim()
 }
 
 export const posterUrl = (path?: string) => path ? `https://image.tmdb.org/t/p/w185${path}` : undefined

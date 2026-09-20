@@ -2,7 +2,7 @@ import type { MediaKind } from '../lib/media'
 import type { TmdbResult } from '../lib/tmdb'
 
 export type RowState = 'ready' | 'conflict' | 'unrecognized' | 'needs-choice' | 'error' | 'done'
-export type PlanFilter = 'all' | 'ready' | 'conflict' | 'unrecognized'
+export type PlanFilter = 'all' | 'ready' | 'conflict' | 'needs-choice' | 'unrecognized'
 
 export interface FoundFile {
   name: string
@@ -17,6 +17,7 @@ export interface PlanRow {
   sidecars: FoundFile[]
   kind: MediaKind
   title: string
+  targetTitle?: string
   year?: number
   season?: number
   episode?: number
@@ -33,6 +34,6 @@ export interface PlanRow {
 export interface MoveLog {
   source: string
   target: string
-  result: 'Verschoben' | 'Fehler'
+  result: 'Moved' | 'Error'
   message?: string
 }

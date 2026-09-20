@@ -34,7 +34,7 @@ function isMatchingSidecar(source: FoundFile, candidate: FoundFile): boolean {
 }
 
 export function rebuildTarget(row: PlanRow, episodeTitle: string | undefined, baseFolders: BaseFolders): void {
-  const title = safeName(row.title) || 'Unbekannter Titel'
+  const title = safeName(row.targetTitle || row.title) || 'Unknown Title'
   const label = row.year ? `${title} (${row.year})` : title
   const extension = extensionOf(row.source.name)
   const rootFolder = safeName(baseFolders.root) || '_clean'
@@ -49,7 +49,7 @@ export function rebuildTarget(row: PlanRow, episodeTitle: string | undefined, ba
 
 export function companionTargetName(row: PlanRow, originalName: string): string {
   const targetName = row.target.split('/').pop()
-  if (!targetName) throw new Error('Ungültiger Zielpfad für Begleitdatei.')
+  if (!targetName) throw new Error('Invalid destination path for sidecar file.')
   return `${targetName.replace(/\.[^.]+$/, '')}.${extensionOf(originalName)}`
 }
 
@@ -61,7 +61,7 @@ export function detectDuplicateTargets(rows: PlanRow[]): void {
     const prior = seen.get(row.target.toLowerCase())
     if (prior) {
       row.state = prior.state = 'conflict'
-      row.error = prior.error = 'Zwei Einträge haben dasselbe Ziel.'
+      row.error = prior.error = 'Two entries have the same destination.'
     } else seen.set(row.target.toLowerCase(), row)
   }
 }

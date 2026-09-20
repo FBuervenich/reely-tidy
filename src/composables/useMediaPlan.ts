@@ -1,5 +1,5 @@
 import { computed, ref, type Ref } from 'vue'
-import { getEpisode, type TmdbResult, searchTmdb } from '../lib/tmdb'
+import { getEnglishTitle, getEpisode, type TmdbResult, searchTmdb } from '../lib/tmdb'
 import { companionTargetName, createPlan, detectDuplicateTargets, rebuildTarget, type BaseFolders } from '../services/plan-builder'
 import { fileExists, getDestination, listFiles, moveFile, pickSourceFolder, supportsNativeMove } from '../services/file-system'
 import { readMappings, writeMapping } from '../services/storage'
@@ -9,7 +9,7 @@ const errorMessage = (error: unknown) => error instanceof Error ? error.message 
 
 export function useMediaPlan(token: Ref<string>, baseFolders: { root: Ref<string>; movies: Ref<string>; shows: Ref<string> }) {
   const root = ref<FileSystemDirectoryHandle>()
-  const rootName = ref('Noch kein Ordner gewählt')
+  const rootName = ref('No folder selected')
   const rows = ref<PlanRow[]>([])
   const logs = ref<MoveLog[]>([])
   const filter = ref<PlanFilter>('all')
@@ -22,29 +22,35 @@ export function useMediaPlan(token: Ref<string>, baseFolders: { root: Ref<string
   const visibleRows = computed(() => filter.value === 'all' ? rows.value : rows.value.filter((row) => row.state === filter.value))
   const readyCount = computed(() => rows.value.filter((row) => row.enabled && row.state === 'ready').length)
 
-  async function chooseFolder(): Promise<void> {
+  async function chooseFolder(): Promise<boolean> {
     try {
       const selected = await pickSourceFolder()
       root.value = selected
       rootName.value = selected.name
       rows.value = []
       logs.value = []
-      scanState.value = `Ordner „${selected.name}“ ausgewählt. Als Nächstes den Scan starten; es wurde noch nichts verändert.`
+      scanState.value = `Folder “${selected.name}” selected. Starting the preview — no files have been changed.`
       moveState.value = ''
+      return true
     } catch (error) {
       const exception = error as DOMException
-      if (exception.name === 'AbortError') return
+      if (exception.name === 'AbortError') return false
       if (exception.name === 'NotAllowedError') {
         const detail = exception.message ? ` (${exception.message})` : ''
-        scanState.value = `Der Browser hat den Ordnerzugriff abgelehnt${detail}. Bitte die App in einem eigenständigen Chromium-Tab öffnen und den Picker direkt über „Ordner auswählen“ auslösen.`
-        return
+        scanState.value = `The browser denied folder access${detail}. Open the app in a standalone Chromium tab and trigger the picker directly using “Choose folder and scan”.`
+        return false
       }
       if (exception.name === 'SecurityError') {
-        scanState.value = 'Ordnerzugriff wurde aus Sicherheitsgründen blockiert. Bitte die App über http://localhost statt über eine Netzwerkadresse oder file:// öffnen.'
-        return
+        scanState.value = 'Folder access was blocked for security reasons. Open the app via http://localhost instead of a network address or file://.'
+        return false
       }
       scanState.value = errorMessage(error)
+      return false
     }
+  }
+
+  async function chooseAndScan(): Promise<void> {
+    if (await chooseFolder()) await scan()
   }
 
   async function scan(): Promise<void> {
@@ -52,13 +58,14 @@ export function useMediaPlan(token: Ref<string>, baseFolders: { root: Ref<string
     scanning.value = true
     rows.value = []
     logs.value = []
-    scanState.value = 'Dateien werden gelesen …'
+    scanState.value = 'Reading files …'
     try {
-      rows.value = createPlan(await listFiles(root.value), currentBaseFolders())
+      const baseFolders = currentBaseFolders()
+      rows.value = createPlan(await listFiles(root.value, { ignoredRootDirectories: [baseFolders.root] }), baseFolders)
       if (token.value) await Promise.all(rows.value.filter((row) => row.kind !== 'unknown').map(enrich))
       detectDuplicateTargets(rows.value)
-      scanState.value = `${rows.value.length} Videodatei(en) geplant. Dies ist nur eine Vorschau — es wurde nichts verändert.`
-    } catch (error) { scanState.value = `Scan fehlgeschlagen: ${errorMessage(error)}` }
+      scanState.value = ''
+    } catch (error) { scanState.value = `Scan failed: ${errorMessage(error)}` }
     finally { scanning.value = false }
   }
 
@@ -74,8 +81,8 @@ export function useMediaPlan(token: Ref<string>, baseFolders: { root: Ref<string
       else if (row.candidates.length > 1) {
         row.state = 'needs-choice'
         row.target = ''
-        row.error = 'Bitte passenden TMDB-Treffer auswählen.'
-      } else row.error = 'Kein TMDB-Treffer — Dateinamen-Vorschlag wird verwendet.'
+        row.error = 'Select the correct TMDB match.'
+      } else row.error = 'No TMDB match — using the filename suggestion.'
     } catch (error) { row.state = 'error'; row.error = errorMessage(error) }
     finally { row.searching = false }
   }
@@ -86,13 +93,22 @@ export function useMediaPlan(token: Ref<string>, baseFolders: { root: Ref<string
     row.year = match.year ?? row.year
     row.state = 'ready'
     row.error = undefined
+    // Make the destination visible immediately; richer English / episode metadata can refine it afterwards.
+    rebuildTarget(row, undefined, currentBaseFolders())
+    if (token.value) {
+      try {
+        row.targetTitle = await getEnglishTitle(row.kind === 'movie' ? 'movie' : 'tv', match.id, token.value)
+      } catch (error) {
+        row.error = `English title could not be loaded: ${errorMessage(error)}`
+      }
+    }
     if (row.kind === 'series' && row.season && row.episode && token.value) {
       try {
         const episodeTitle = await getEpisode(match.id, row.season, row.episode, token.value)
-        if (!episodeTitle) row.error = 'Episodentitel nicht verfügbar; Vorschlag kann bearbeitet werden.'
+        if (!episodeTitle) row.error = 'Episode title is unavailable; the suggestion can be edited.'
         rebuildTarget(row, episodeTitle, currentBaseFolders())
       } catch (error) {
-        row.error = `Episodentitel nicht geladen: ${errorMessage(error)}`
+        row.error = `Episode title could not be loaded: ${errorMessage(error)}`
         rebuildTarget(row, undefined, currentBaseFolders())
       }
     } else rebuildTarget(row, undefined, currentBaseFolders())
@@ -116,14 +132,14 @@ export function useMediaPlan(token: Ref<string>, baseFolders: { root: Ref<string
     rows.value = []
     logs.value = []
     moveState.value = ''
-    scanState.value = 'Einstellungen geändert. Bitte erneut scannen, damit der Dry-Run die neue Ordnerstruktur verwendet.'
+    scanState.value = 'Settings changed. Scan again so the dry run uses the new folder structure.'
   }
 
-  function releaseAccess(message = 'Ordnerzugriff in der App freigegeben. Für einen weiteren Scan den Ordner erneut auswählen.'): void {
+  function releaseAccess(message = 'Folder access has been released in the app. Choose the folder again for another scan.'): void {
     // FileSystemDirectoryHandle has no close() API. Clearing every app reference is the
     // strongest release possible; the browser can then reclaim its native resources.
     root.value = undefined
-    rootName.value = 'Kein Ordner gewählt'
+    rootName.value = 'No folder selected'
     rows.value = []
     scanState.value = message
     moveState.value = ''
@@ -131,7 +147,7 @@ export function useMediaPlan(token: Ref<string>, baseFolders: { root: Ref<string
 
   async function moveAll(): Promise<void> {
     if (!supportsMove) {
-      moveState.value = 'Dieses Chromium unterstützt echtes Verschieben über die File System Access API nicht. Es wurde nichts verändert.'
+      moveState.value = 'This Chromium browser does not support native moving through the File System Access API. No files were changed.'
       return
     }
     if (!root.value) return
@@ -139,19 +155,19 @@ export function useMediaPlan(token: Ref<string>, baseFolders: { root: Ref<string
     if (!candidates.length) return
     moving.value = true
     logs.value = []
-    moveState.value = 'Prüfe Zielkonflikte …'
+    moveState.value = 'Checking destination conflicts …'
     try {
       for (const row of candidates) {
         const destination = await getDestination(root.value, row.target)
         const names = [destination.name, ...row.sidecars.map((file) => companionTargetName(row, file.name))]
         for (const name of names) if (await fileExists(destination.folder, name)) {
           row.state = 'conflict'
-          row.error = `Zieldatei existiert bereits: ${name}`
+          row.error = `Destination file already exists: ${name}`
         }
       }
       const permitted = candidates.filter((row) => row.state === 'ready')
       if (!permitted.length) {
-        moveState.value = 'Ausführung abgebrochen: Zielkonflikte müssen zuerst manuell gelöst werden.'
+        moveState.value = 'Execution stopped: resolve destination conflicts manually first.'
         return
       }
       for (const row of permitted) {
@@ -160,20 +176,20 @@ export function useMediaPlan(token: Ref<string>, baseFolders: { root: Ref<string
           await moveFile(row.source.handle, destination.folder, destination.name)
           for (const sidecar of row.sidecars) await moveFile(sidecar.handle, destination.folder, companionTargetName(row, sidecar.name))
           row.state = 'done'
-          logs.value.push({ source: row.source.path, target: row.target, result: 'Verschoben' })
+          logs.value.push({ source: row.source.path, target: row.target, result: 'Moved' })
         } catch (error) {
           row.state = 'error'
-          row.error = `Verschieben verweigert: ${errorMessage(error)}`
-          logs.value.push({ source: row.source.path, target: row.target, result: 'Fehler', message: row.error })
+          row.error = `Move was denied: ${errorMessage(error)}`
+          logs.value.push({ source: row.source.path, target: row.target, result: 'Error', message: row.error })
         }
       }
-      const allSucceeded = logs.value.length === permitted.length && logs.value.every((entry) => entry.result === 'Verschoben')
+      const allSucceeded = logs.value.length === permitted.length && logs.value.every((entry) => entry.result === 'Moved')
       if (allSucceeded) {
-        releaseAccess('Ausführung beendet und Ordnerzugriff in der App freigegeben. Das lokale Protokoll bleibt sichtbar.')
-      } else moveState.value = 'Ausführung beendet. Details stehen im lokalen Protokoll.'
-    } catch (error) { moveState.value = `Ausführung abgebrochen: ${errorMessage(error)}` }
+        releaseAccess('Execution complete and folder access has been released in the app. The local log remains visible.')
+      } else moveState.value = 'Execution complete. See the local log for details.'
+    } catch (error) { moveState.value = `Execution stopped: ${errorMessage(error)}` }
     finally { moving.value = false }
   }
 
-  return { root, rootName, rows, logs, filter, scanState, moveState, scanning, moving, supportsMove, visibleRows, readyCount, chooseFolder, scan, selectMatch, updateTarget, setEnabled, resetPlanForSettingsChange, releaseAccess, moveAll }
+  return { root, rootName, rows, logs, filter, scanState, moveState, scanning, moving, supportsMove, visibleRows, readyCount, chooseAndScan, selectMatch, updateTarget, setEnabled, resetPlanForSettingsChange, releaseAccess, moveAll }
 }

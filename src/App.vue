@@ -1,5 +1,7 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
+import AboutDialog from './components/AboutDialog.vue'
+import BrowserSupportDialog from './components/BrowserSupportDialog.vue'
 import ExecutionLog from './components/ExecutionLog.vue'
 import PlanTable from './components/PlanTable.vue'
 import SettingsPage from './components/SettingsPage.vue'
@@ -9,10 +11,21 @@ import { useSettings } from './composables/useSettings'
 
 const { token, rootFolder, moviesBaseFolder, showsBaseFolder, save, deleteToken } = useSettings()
 const {
-  root, rootName, rows, logs, filter, scanState, moveState, scanning, moving, supportsMove,
-  visibleRows, readyCount, chooseFolder, scan, selectMatch, updateTarget, setEnabled, resetPlanForSettingsChange, releaseAccess, moveAll
+  rootName, rows, logs, filter, scanState, moveState, scanning, moving, supportsMove,
+  visibleRows, readyCount, chooseAndScan, selectMatch, updateTarget, setEnabled, resetPlanForSettingsChange, moveAll
 } = useMediaPlan(token, { root: rootFolder, movies: moviesBaseFolder, shows: showsBaseFolder })
 const page = ref<'renamer' | 'settings'>('renamer')
+const aboutOpen = ref(false)
+const apiCheckComplete = ref(false)
+const fileSystemApiAvailable = ref(false)
+const isFirefox = ref(false)
+const showBrowserSupportDialog = computed(() => apiCheckComplete.value && !fileSystemApiAvailable.value)
+
+onMounted(() => {
+  fileSystemApiAvailable.value = 'showDirectoryPicker' in window && window.isSecureContext
+  isFirefox.value = /firefox/i.test(navigator.userAgent)
+  apiCheckComplete.value = true
+})
 
 function saveSettings(settings: { token: string; rootFolder: string; moviesBaseFolder: string; showsBaseFolder: string }): void {
   save(settings)
@@ -24,25 +37,22 @@ function saveSettings(settings: { token: string; rootFolder: string; moviesBaseF
 <template>
   <main v-if="page === 'renamer'">
     <header class="hero">
-      <div><p class="eyebrow">LOCAL · JELLYFIN · OHNE SERVER</p><h1>Media Renamer</h1><p class="sub">Ordnet Filme und Serien neu — mit deinem Browser direkt auf dem gewählten Datenträger.</p></div>
-      <button class="settings" @click="page = 'settings'">⚙ Einstellungen <span :class="{ active: token }"></span></button>
+      <div><p class="eyebrow">SIMPLE LOCAL MEDIA ORGANIZER</p><div class="app-name"><h1>ReelTidy</h1><button class="info-button" type="button" aria-label="About ReelTidy" @click="aboutOpen = true">i</button></div></div>
+      <button class="settings" @click="page = 'settings'">⚙ Settings <span :class="{ active: token }"></span></button>
     </header>
 
     <WorkflowSteps
       :root-name="rootName"
-      :has-root="Boolean(root)"
       :scanning="scanning"
       :moving="moving"
       :ready-count="readyCount"
       :supports-move="supportsMove"
-      :can-release="Boolean(root)"
-      :on-choose-folder="chooseFolder"
-      @scan="scan"
-      @release="releaseAccess()"
+      :file-system-api-available="fileSystemApiAvailable"
+      :on-choose-and-scan="chooseAndScan"
       @move="moveAll"
     />
 
-    <p v-if="!supportsMove" class="notice danger">Echtes Verschieben wird von diesem Browser nicht angeboten. Die Ausführung bleibt gesperrt; es gibt keinen Kopier-Fallback.</p>
+    <p v-if="!supportsMove" class="notice danger">Native moving is not available in this browser. Execution remains disabled; there is no copy fallback.</p>
     <p v-if="scanState" class="notice">{{ scanState }}</p>
     <p v-if="moveState" class="notice">{{ moveState }}</p>
 
@@ -59,4 +69,6 @@ function saveSettings(settings: { token: string; rootFolder: string; moviesBaseF
     <ExecutionLog v-if="logs.length" :entries="logs" />
   </main>
   <main v-else><SettingsPage :token="token" :root-folder="rootFolder" :movies-base-folder="moviesBaseFolder" :shows-base-folder="showsBaseFolder" @save="saveSettings" @delete-token="deleteToken" @back="page = 'renamer'" /></main>
+  <BrowserSupportDialog :open="showBrowserSupportDialog" :is-firefox="isFirefox" />
+  <AboutDialog :open="aboutOpen" @close="aboutOpen = false" />
 </template>

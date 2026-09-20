@@ -23,11 +23,11 @@ function clearToken(): void { tokenDraft.value = ''; emit('deleteToken') }
 
 <template>
   <section class="settings-page">
-    <div class="page-heading"><div><p class="eyebrow">EINSTELLUNGEN</p><h1>Konfiguration</h1><p class="sub">Alle Werte bleiben ausschließlich in diesem Browser gespeichert.</p></div><button @click="$emit('back')">← Zum Renamer</button></div>
+    <div class="page-heading"><div><p class="eyebrow">SETTINGS</p><h1>Configuration</h1><p class="sub">All values are stored in this browser only.</p></div><button @click="$emit('back')">← Back to ReelTidy</button></div>
     <form class="settings-form" @submit.prevent="save">
-      <fieldset><legend>Ordnerstruktur</legend><p>Alle Zielordner liegen im gewählten Quellordner.</p><label>Übergeordneter Zielordner<input v-model="rootDraft" required placeholder="_clean" /></label><label>Basis-Ordner für Filme<input v-model="moviesDraft" required placeholder="Movies" /></label><label>Basis-Ordner für Serien<input v-model="showsDraft" required placeholder="Shows" /></label><p class="path-preview">Film-Zielpfad: <code>{{ previewRoot() }}/{{ previewMovies() }}/Film (2024)/Film (2024).mkv</code></p></fieldset>
-      <fieldset><legend>TMDB-Zugang</legend><p>Der persönliche Read Access Token wird nur lokal gespeichert und direkt an TMDB gesendet — nie an einen eigenen Server.</p><label>TMDB API Read Access Token<input v-model="tokenDraft" type="password" autocomplete="off" placeholder="eyJhbGciOiJIUzI1NiJ9…" /></label><button type="button" class="quiet" @click="clearToken">Token löschen</button></fieldset>
-      <div class="settings-actions"><button type="button" class="quiet" @click="$emit('back')">Abbrechen</button><button class="accent" type="submit">Einstellungen speichern</button></div>
+      <fieldset><legend>Folder structure</legend><p>All destination folders are created inside the selected source folder.</p><label>Root destination folder<input v-model="rootDraft" required placeholder="_clean" /></label><label>Movies base folder<input v-model="moviesDraft" required placeholder="Movies" /></label><label>Shows base folder<input v-model="showsDraft" required placeholder="Shows" /></label><p class="path-preview">Movie destination: <code>{{ previewRoot() }}/{{ previewMovies() }}/Movie (2024)/Movie (2024).mkv</code></p></fieldset>
+      <fieldset><legend>TMDB access</legend><p>Your personal Read Access Token is stored locally and sent directly to TMDB only — never to an application server.</p><label>TMDB API Read Access Token<input v-model="tokenDraft" type="password" autocomplete="off" placeholder="eyJhbGciOiJIUzI1NiJ9…" /></label><button type="button" class="quiet" @click="clearToken">Delete token</button></fieldset>
+      <div class="settings-actions"><button type="button" class="quiet" @click="$emit('back')">Cancel</button><button class="accent" type="submit">Save settings</button></div>
     </form>
   </section>
 </template>
