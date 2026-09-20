@@ -1,9 +1,11 @@
 # ReelyTidy
 
 ReelyTidy is a private, browser-based media organizer. It scans a folder of movies and TV shows, looks up metadata with [TMDB](https://www.themoviedb.org/), and creates a reviewable rename and move plan before changing any files.
+**No installation required:** open ReelyTidy in a supported browser and use it right away. It runs directly in current Chromium-based browsers, with no desktop app or server to install.
 
-## Highlights
+## Highlight
 
+- Runs fully in your browser.
 - Keeps media files on your device; there is no ReelyTidy backend or tracking.
 - Looks up movie, series, season, and episode metadata directly from TMDB.
 - Provides a preview before files are moved.
@@ -33,14 +35,6 @@ The TMDB token and settings are stored only in your browser. Original empty sour
 ```bash
 npm install
 npm run dev
-```
-
-Additional commands:
-
-```bash
-npm run check   # formatting, linting, and type checks
-npm run build   # production build in dist/
-npm run preview # preview the production build
 ```
 
 ## Deploy on Netlify
