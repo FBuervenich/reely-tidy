@@ -1,13 +1,14 @@
 import { computed, ref, type Ref } from 'vue'
 import { getEnglishTitle, getEpisode, type TmdbResult, searchTmdb } from '../lib/tmdb'
 import { companionTargetName, createPlan, detectDuplicateTargets, rebuildTarget, type BaseFolders } from '../services/plan-builder'
+import type { NamingPreset } from '../lib/naming'
 import { fileExists, getDestination, listFiles, moveFile, pickSourceFolder, supportsNativeMove } from '../services/file-system'
 import { readMappings, writeMapping } from '../services/storage'
 import type { MoveLog, PlanFilter, PlanRow } from '../types/plan'
 
 const errorMessage = (error: unknown) => error instanceof Error ? error.message : String(error)
 
-export function useMediaPlan(token: Ref<string>, baseFolders: { root: Ref<string>; movies: Ref<string>; shows: Ref<string> }) {
+export function useMediaPlan(token: Ref<string>, baseFolders: { root: Ref<string>; movies: Ref<string>; shows: Ref<string>; preset: Ref<NamingPreset> }) {
   const root = ref<FileSystemDirectoryHandle>()
   const rootName = ref('No folder selected')
   const rows = ref<PlanRow[]>([])
@@ -122,7 +123,7 @@ export function useMediaPlan(token: Ref<string>, baseFolders: { root: Ref<string
   }
 
   function currentBaseFolders(): BaseFolders {
-    return { root: baseFolders.root.value, movies: baseFolders.movies.value, shows: baseFolders.shows.value }
+    return { root: baseFolders.root.value, movies: baseFolders.movies.value, shows: baseFolders.shows.value, preset: baseFolders.preset.value }
   }
 
   function setEnabled(row: PlanRow, enabled: boolean): void { row.enabled = enabled }

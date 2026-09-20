@@ -1,7 +1,8 @@
-import { extensionOf, pad, parseMediaName, safeName, SIDECAR_EXTENSIONS, stemOf, VIDEO_EXTENSIONS } from '../lib/media'
+import { extensionOf, parseMediaName, SIDECAR_EXTENSIONS, stemOf, VIDEO_EXTENSIONS } from '../lib/media'
+import { buildTarget, defaultNamingPreset, type NamingPreset } from '../lib/naming'
 import type { FoundFile, PlanRow } from '../types/plan'
 
-export interface BaseFolders { root: string; movies: string; shows: string }
+export interface BaseFolders { root: string; movies: string; shows: string; preset?: NamingPreset }
 
 export function createPlan(files: FoundFile[], baseFolders: BaseFolders): PlanRow[] {
   return files
@@ -34,17 +35,10 @@ function isMatchingSidecar(source: FoundFile, candidate: FoundFile): boolean {
 }
 
 export function rebuildTarget(row: PlanRow, episodeTitle: string | undefined, baseFolders: BaseFolders): void {
-  const title = safeName(row.targetTitle || row.title) || 'Unknown Title'
-  const label = row.year ? `${title} (${row.year})` : title
-  const extension = extensionOf(row.source.name)
-  const rootFolder = safeName(baseFolders.root) || '_clean'
-  const moviesFolder = safeName(baseFolders.movies) || 'Movies'
-  const showsFolder = safeName(baseFolders.shows) || 'Shows'
-  if (row.kind === 'movie') row.target = `${rootFolder}/${moviesFolder}/${label}/${label}.${extension}`
-  else if (row.kind === 'series' && row.season && row.episode) {
-    const episode = safeName(episodeTitle || `Episode ${pad(row.episode)}`)
-    row.target = `${rootFolder}/${showsFolder}/${label}/Season ${pad(row.season)}/${label} - S${pad(row.season)}E${pad(row.episode)} - ${episode}.${extension}`
-  } else row.target = ''
+  const preset = baseFolders.preset ?? defaultNamingPreset()
+  if (row.kind === 'movie') row.target = buildTarget(row, baseFolders.root, baseFolders.movies, preset.movie, episodeTitle)
+  else if (row.kind === 'series' && row.season && row.episode) row.target = buildTarget(row, baseFolders.root, baseFolders.shows, preset.series, episodeTitle)
+  else row.target = ''
 }
 
 export function companionTargetName(row: PlanRow, originalName: string): string {
