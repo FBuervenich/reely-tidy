@@ -1,12 +1,14 @@
 import { extensionOf, pad, parseMediaName, safeName, SIDECAR_EXTENSIONS, stemOf, VIDEO_EXTENSIONS } from '../lib/media'
 import type { FoundFile, PlanRow } from '../types/plan'
 
-export function createPlan(files: FoundFile[]): PlanRow[] {
+export interface BaseFolders { root: string; movies: string; shows: string }
+
+export function createPlan(files: FoundFile[], baseFolders: BaseFolders): PlanRow[] {
   return files
     .filter((file) => VIDEO_EXTENSIONS.has(extensionOf(file.name)))
     .map((source, index) => {
       const parsed = parseMediaName(source.name)
-      const sidecars = files.filter((other) => other.parent === source.parent && SIDECAR_EXTENSIONS.has(extensionOf(other.name)) && stemOf(other.name) === stemOf(source.name))
+      const sidecars = files.filter((other) => isMatchingSidecar(source, other))
       const row: PlanRow = {
         id: `${index}-${source.path}`,
         source,
@@ -19,24 +21,36 @@ export function createPlan(files: FoundFile[]): PlanRow[] {
         searching: false,
         state: parsed.kind === 'unknown' ? 'unrecognized' : 'ready'
       }
-      rebuildTarget(row)
+      rebuildTarget(row, undefined, baseFolders)
       return row
     })
 }
 
-export function rebuildTarget(row: PlanRow, episodeTitle?: string): void {
+function isMatchingSidecar(source: FoundFile, candidate: FoundFile): boolean {
+  if (candidate.parent !== source.parent || !SIDECAR_EXTENSIONS.has(extensionOf(candidate.name))) return false
+  const sourceName = source.name.toLocaleLowerCase()
+  const candidateStem = stemOf(candidate.name).toLocaleLowerCase()
+  return candidateStem === stemOf(source.name).toLocaleLowerCase() || candidateStem === sourceName
+}
+
+export function rebuildTarget(row: PlanRow, episodeTitle: string | undefined, baseFolders: BaseFolders): void {
   const title = safeName(row.title) || 'Unbekannter Titel'
   const label = row.year ? `${title} (${row.year})` : title
   const extension = extensionOf(row.source.name)
-  if (row.kind === 'movie') row.target = `${label}/${label}.${extension}`
+  const rootFolder = safeName(baseFolders.root) || '_clean'
+  const moviesFolder = safeName(baseFolders.movies) || 'Movies'
+  const showsFolder = safeName(baseFolders.shows) || 'Shows'
+  if (row.kind === 'movie') row.target = `${rootFolder}/${moviesFolder}/${label}/${label}.${extension}`
   else if (row.kind === 'series' && row.season && row.episode) {
     const episode = safeName(episodeTitle || `Episode ${pad(row.episode)}`)
-    row.target = `${label}/Season ${pad(row.season)}/${label} - S${pad(row.season)}E${pad(row.episode)} - ${episode}.${extension}`
+    row.target = `${rootFolder}/${showsFolder}/${label}/Season ${pad(row.season)}/${label} - S${pad(row.season)}E${pad(row.episode)} - ${episode}.${extension}`
   } else row.target = ''
 }
 
 export function companionTargetName(row: PlanRow, originalName: string): string {
-  return `${row.target.replace(/\.[^.]+$/, '')}.${extensionOf(originalName)}`
+  const targetName = row.target.split('/').pop()
+  if (!targetName) throw new Error('Ungültiger Zielpfad für Begleitdatei.')
+  return `${targetName.replace(/\.[^.]+$/, '')}.${extensionOf(originalName)}`
 }
 
 export function detectDuplicateTargets(rows: PlanRow[]): void {

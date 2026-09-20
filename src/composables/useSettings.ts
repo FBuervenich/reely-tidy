@@ -1,16 +1,23 @@
 import { ref } from 'vue'
-import { readTmdbToken, writeTmdbToken } from '../services/storage'
+import { readSettings, writeSettings, type AppSettings } from '../services/storage'
 
 export function useSettings() {
-  const token = ref(readTmdbToken())
-  const dialogOpen = ref(false)
+  const stored = readSettings()
+  const token = ref(stored.token)
+  const rootFolder = ref(stored.rootFolder)
+  const moviesBaseFolder = ref(stored.moviesBaseFolder)
+  const showsBaseFolder = ref(stored.showsBaseFolder)
 
-  function saveToken(value: string): void {
-    token.value = value.trim()
-    writeTmdbToken(token.value)
-    dialogOpen.value = false
+  function save(settings: AppSettings): void {
+    token.value = settings.token.trim()
+    rootFolder.value = settings.rootFolder.trim() || '_clean'
+    moviesBaseFolder.value = settings.moviesBaseFolder.trim() || 'Movies'
+    showsBaseFolder.value = settings.showsBaseFolder.trim() || 'Shows'
+    writeSettings({ token: token.value, rootFolder: rootFolder.value, moviesBaseFolder: moviesBaseFolder.value, showsBaseFolder: showsBaseFolder.value })
   }
-  function deleteToken(): void { token.value = ''; writeTmdbToken('') }
+  function deleteToken(): void {
+    save({ token: '', rootFolder: rootFolder.value, moviesBaseFolder: moviesBaseFolder.value, showsBaseFolder: showsBaseFolder.value })
+  }
 
-  return { token, dialogOpen, saveToken, deleteToken }
+  return { token, rootFolder, moviesBaseFolder, showsBaseFolder, save, deleteToken }
 }

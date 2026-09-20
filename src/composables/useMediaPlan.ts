@@ -1,13 +1,13 @@
 import { computed, ref, type Ref } from 'vue'
 import { getEpisode, type TmdbResult, searchTmdb } from '../lib/tmdb'
-import { companionTargetName, createPlan, detectDuplicateTargets, rebuildTarget } from '../services/plan-builder'
+import { companionTargetName, createPlan, detectDuplicateTargets, rebuildTarget, type BaseFolders } from '../services/plan-builder'
 import { fileExists, getDestination, listFiles, moveFile, pickSourceFolder, supportsNativeMove } from '../services/file-system'
 import { readMappings, writeMapping } from '../services/storage'
 import type { MoveLog, PlanFilter, PlanRow } from '../types/plan'
 
 const errorMessage = (error: unknown) => error instanceof Error ? error.message : String(error)
 
-export function useMediaPlan(token: Ref<string>) {
+export function useMediaPlan(token: Ref<string>, baseFolders: { root: Ref<string>; movies: Ref<string>; shows: Ref<string> }) {
   const root = ref<FileSystemDirectoryHandle>()
   const rootName = ref('Noch kein Ordner gewählt')
   const rows = ref<PlanRow[]>([])
@@ -54,7 +54,7 @@ export function useMediaPlan(token: Ref<string>) {
     logs.value = []
     scanState.value = 'Dateien werden gelesen …'
     try {
-      rows.value = createPlan(await listFiles(root.value))
+      rows.value = createPlan(await listFiles(root.value), currentBaseFolders())
       if (token.value) await Promise.all(rows.value.filter((row) => row.kind !== 'unknown').map(enrich))
       detectDuplicateTargets(rows.value)
       scanState.value = `${rows.value.length} Videodatei(en) geplant. Dies ist nur eine Vorschau — es wurde nichts verändert.`
@@ -90,12 +90,12 @@ export function useMediaPlan(token: Ref<string>) {
       try {
         const episodeTitle = await getEpisode(match.id, row.season, row.episode, token.value)
         if (!episodeTitle) row.error = 'Episodentitel nicht verfügbar; Vorschlag kann bearbeitet werden.'
-        rebuildTarget(row, episodeTitle)
+        rebuildTarget(row, episodeTitle, currentBaseFolders())
       } catch (error) {
         row.error = `Episodentitel nicht geladen: ${errorMessage(error)}`
-        rebuildTarget(row)
+        rebuildTarget(row, undefined, currentBaseFolders())
       }
-    } else rebuildTarget(row)
+    } else rebuildTarget(row, undefined, currentBaseFolders())
     if (remember) writeMapping(row.identityKey, match)
     detectDuplicateTargets(rows.value)
   }
@@ -105,7 +105,29 @@ export function useMediaPlan(token: Ref<string>) {
     if (target.trim()) { row.state = 'ready'; row.error = undefined; detectDuplicateTargets(rows.value) }
   }
 
+  function currentBaseFolders(): BaseFolders {
+    return { root: baseFolders.root.value, movies: baseFolders.movies.value, shows: baseFolders.shows.value }
+  }
+
   function setEnabled(row: PlanRow, enabled: boolean): void { row.enabled = enabled }
+
+  function resetPlanForSettingsChange(): void {
+    if (!rows.value.length) return
+    rows.value = []
+    logs.value = []
+    moveState.value = ''
+    scanState.value = 'Einstellungen geändert. Bitte erneut scannen, damit der Dry-Run die neue Ordnerstruktur verwendet.'
+  }
+
+  function releaseAccess(message = 'Ordnerzugriff in der App freigegeben. Für einen weiteren Scan den Ordner erneut auswählen.'): void {
+    // FileSystemDirectoryHandle has no close() API. Clearing every app reference is the
+    // strongest release possible; the browser can then reclaim its native resources.
+    root.value = undefined
+    rootName.value = 'Kein Ordner gewählt'
+    rows.value = []
+    scanState.value = message
+    moveState.value = ''
+  }
 
   async function moveAll(): Promise<void> {
     if (!supportsMove) {
@@ -145,10 +167,13 @@ export function useMediaPlan(token: Ref<string>) {
           logs.value.push({ source: row.source.path, target: row.target, result: 'Fehler', message: row.error })
         }
       }
-      moveState.value = 'Ausführung beendet. Details stehen im lokalen Protokoll.'
+      const allSucceeded = logs.value.length === permitted.length && logs.value.every((entry) => entry.result === 'Verschoben')
+      if (allSucceeded) {
+        releaseAccess('Ausführung beendet und Ordnerzugriff in der App freigegeben. Das lokale Protokoll bleibt sichtbar.')
+      } else moveState.value = 'Ausführung beendet. Details stehen im lokalen Protokoll.'
     } catch (error) { moveState.value = `Ausführung abgebrochen: ${errorMessage(error)}` }
     finally { moving.value = false }
   }
 
-  return { root, rootName, rows, logs, filter, scanState, moveState, scanning, moving, supportsMove, visibleRows, readyCount, chooseFolder, scan, selectMatch, updateTarget, setEnabled, moveAll }
+  return { root, rootName, rows, logs, filter, scanState, moveState, scanning, moving, supportsMove, visibleRows, readyCount, chooseFolder, scan, selectMatch, updateTarget, setEnabled, resetPlanForSettingsChange, releaseAccess, moveAll }
 }

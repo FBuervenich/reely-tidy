@@ -6,14 +6,15 @@ defineProps<{
   moving: boolean
   readyCount: number
   supportsMove: boolean
+  canRelease: boolean
   onChooseFolder: () => Promise<void>
 }>()
-defineEmits<{ scan: []; move: [] }>()
+defineEmits<{ scan: []; move: []; release: [] }>()
 </script>
 
 <template>
   <section class="workflow">
-    <div class="step"><span>1</span><div><b>Ordner wählen</b><small>{{ rootName }}</small></div><button type="button" @click="onChooseFolder">Ordner auswählen</button></div>
+    <div class="step"><span>1</span><div><b>Ordner wählen</b><small>{{ rootName }}</small></div><div class="step-actions"><button type="button" @click="onChooseFolder">Ordner auswählen</button><button v-if="canRelease" type="button" class="text-button" @click="$emit('release')">Freigeben</button></div></div>
     <div class="step"><span>2</span><div><b>Vorschau erzeugen</b><small>Videos und gleichnamige Begleitdateien</small></div><button :disabled="!hasRoot || scanning" @click="$emit('scan')">{{ scanning ? 'Scanne …' : 'Scannen' }}</button></div>
     <div class="step"><span>3</span><div><b>Änderungen ausführen</b><small>{{ readyCount }} bereit</small></div><button class="accent" :disabled="!readyCount || moving || !supportsMove" @click="$emit('move')">{{ moving ? 'Verschiebe …' : 'Jetzt verschieben' }}</button></div>
   </section>
