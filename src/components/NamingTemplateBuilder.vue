@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import { ref } from 'vue'
 import {
   TOKEN_LABELS,
   type NamingTemplate,
@@ -11,10 +10,9 @@ const props = defineProps<{
   title: string
   template: NamingTemplate
   allowedTokens: TemplateToken[]
+  preview: string
 }>()
 const emit = defineEmits<{ 'update:template': [template: NamingTemplate] }>()
-const folderTokens = ref<Record<number, TemplateToken>>({})
-const filenameToken = ref<TemplateToken>(props.allowedTokens[0])
 
 function newId(): string {
   return crypto.randomUUID?.() ?? `${Date.now()}-${Math.random()}`
@@ -43,6 +41,13 @@ function addPiece(area: 'folder' | 'filename', token?: TemplateToken, folderInde
   if (area === 'filename') template.filename.push(piece)
   else template.folders[folderIndex!].push(piece)
   update(template)
+}
+function addSelectedPiece(area: 'folder' | 'filename', event: Event, folderIndex?: number): void {
+  const select = event.target as HTMLSelectElement
+  const token = select.value as TemplateToken
+  if (!token) return
+  select.value = ''
+  addPiece(area, token, folderIndex)
 }
 function removePiece(area: 'folder' | 'filename', index: number, folderIndex?: number): void {
   const template = copy()
@@ -114,18 +119,15 @@ function updateText(
               </button></span
             >
           </template>
-          <select v-model="folderTokens[folderIndex]" aria-label="Building block">
+          <select
+            aria-label="Add building block"
+            @change="addSelectedPiece('folder', $event, folderIndex)"
+          >
+            <option value="" selected disabled>Add block …</option>
             <option v-for="token in allowedTokens" :key="token" :value="token">
               {{ TOKEN_LABELS[token] }}
             </option>
           </select>
-          <button
-            type="button"
-            class="small-button"
-            @click="addPiece('folder', folderTokens[folderIndex] || allowedTokens[0], folderIndex)"
-          >
-            Add block
-          </button>
           <button
             type="button"
             class="small-button"
@@ -172,17 +174,18 @@ function updateText(
               </button></span
             >
           </template>
-          <select v-model="filenameToken" aria-label="Building block">
+          <select aria-label="Add building block" @change="addSelectedPiece('filename', $event)">
+            <option value="" selected disabled>Add block …</option>
             <option v-for="token in allowedTokens" :key="token" :value="token">
               {{ TOKEN_LABELS[token] }}
             </option>
           </select>
-          <button type="button" class="small-button" @click="addPiece('filename', filenameToken)">
-            Add block
-          </button>
           <button type="button" class="small-button" @click="addPiece('filename')">+ Text</button>
         </div>
       </div>
     </div>
+    <p class="path-preview template-preview">
+      Preview: <code>{{ preview }}</code>
+    </p>
   </section>
 </template>

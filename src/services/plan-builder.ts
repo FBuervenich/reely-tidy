@@ -10,8 +10,6 @@ import type { FoundFile, PlanRow } from '../types/plan'
 
 export interface BaseFolders {
   root: string
-  movies: string
-  shows: string
   preset?: NamingPreset
 }
 
@@ -53,9 +51,9 @@ export function rebuildTarget(
 ): void {
   const preset = baseFolders.preset ?? defaultNamingPreset()
   if (row.kind === 'movie')
-    row.target = buildTarget(row, baseFolders.root, baseFolders.movies, preset.movie, episodeTitle)
+    row.target = buildTarget(row, baseFolders.root, preset.movie, episodeTitle)
   else if (row.kind === 'series' && row.season && row.episode)
-    row.target = buildTarget(row, baseFolders.root, baseFolders.shows, preset.series, episodeTitle)
+    row.target = buildTarget(row, baseFolders.root, preset.series, episodeTitle)
   else row.target = ''
 }
 

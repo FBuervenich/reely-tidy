@@ -25,8 +25,6 @@ export function useMediaPlan(
   token: Ref<string>,
   baseFolders: {
     root: Ref<string>
-    movies: Ref<string>
-    shows: Ref<string>
     preset: Ref<NamingPreset>
   },
 ) {
@@ -38,12 +36,11 @@ export function useMediaPlan(
   const scanState = ref('')
   const moveState = ref('')
   const scanning = ref(false)
+  const readingFiles = ref(false)
+  const loadingTmdb = ref(false)
   const moving = ref(false)
   const supportsMove = supportsNativeMove()
 
-  const visibleRows = computed(() =>
-    filter.value === 'all' ? rows.value : rows.value.filter((row) => row.state === filter.value),
-  )
   const readyCount = computed(
     () => rows.value.filter((row) => row.enabled && row.state === 'ready').length,
   )
@@ -83,22 +80,29 @@ export function useMediaPlan(
   async function scan(): Promise<void> {
     if (!root.value) return
     scanning.value = true
+    readingFiles.value = true
     rows.value = []
     logs.value = []
-    scanState.value = 'Reading files …'
+    scanState.value = ''
     try {
       const baseFolders = currentBaseFolders()
       rows.value = createPlan(
         await listFiles(root.value, { ignoredRootDirectories: [baseFolders.root] }),
         baseFolders,
       )
-      if (token.value)
-        await Promise.all(rows.value.filter((row) => row.kind !== 'unknown').map(enrich))
+      readingFiles.value = false
+      const rowsToEnrich = rows.value.filter((row) => row.kind !== 'unknown')
+      if (token.value && rowsToEnrich.length) {
+        loadingTmdb.value = true
+        await Promise.all(rowsToEnrich.map(enrich))
+      }
       detectDuplicateTargets(rows.value)
       scanState.value = ''
     } catch (error) {
       scanState.value = `Scan failed: ${errorMessage(error)}`
     } finally {
+      readingFiles.value = false
+      loadingTmdb.value = false
       scanning.value = false
     }
   }
@@ -178,8 +182,6 @@ export function useMediaPlan(
   function currentBaseFolders(): BaseFolders {
     return {
       root: baseFolders.root.value,
-      movies: baseFolders.movies.value,
-      shows: baseFolders.shows.value,
       preset: baseFolders.preset.value,
     }
   }
@@ -285,9 +287,10 @@ export function useMediaPlan(
     scanState,
     moveState,
     scanning,
+    readingFiles,
+    loadingTmdb,
     moving,
     supportsMove,
-    visibleRows,
     readyCount,
     chooseAndScan,
     selectMatch,

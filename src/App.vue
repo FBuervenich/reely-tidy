@@ -10,16 +10,7 @@ import { useMediaPlan } from './composables/useMediaPlan'
 import { useSettings } from './composables/useSettings'
 import { defaultNamingPreset } from './lib/naming'
 
-const {
-  token,
-  rootFolder,
-  moviesBaseFolder,
-  showsBaseFolder,
-  namingPresets,
-  activeNamingPresetId,
-  save,
-  deleteToken,
-} = useSettings()
+const { token, rootFolder, namingPresets, activeNamingPresetId, save, deleteToken } = useSettings()
 const activeNamingPreset = computed(
   () =>
     namingPresets.value.find((preset) => preset.id === activeNamingPresetId.value) ??
@@ -34,9 +25,10 @@ const {
   scanState,
   moveState,
   scanning,
+  readingFiles,
+  loadingTmdb,
   moving,
   supportsMove,
-  visibleRows,
   readyCount,
   chooseAndScan,
   selectMatch,
@@ -46,8 +38,6 @@ const {
   moveAll,
 } = useMediaPlan(token, {
   root: rootFolder,
-  movies: moviesBaseFolder,
-  shows: showsBaseFolder,
   preset: activeNamingPreset,
 })
 const page = ref<'renamer' | 'settings'>('renamer')
@@ -68,8 +58,6 @@ onMounted(() => {
 function saveSettings(settings: {
   token: string
   rootFolder: string
-  moviesBaseFolder: string
-  showsBaseFolder: string
   namingPresets: typeof namingPresets.value
   activeNamingPresetId: string
 }): void {
@@ -112,31 +100,40 @@ function saveSettings(settings: {
       @move="moveAll"
     />
 
+    <div v-if="readingFiles" class="scan-loading" role="status">
+      <span class="loading-spinner" aria-hidden="true"></span><span>Loading files</span>
+    </div>
+
     <p v-if="!supportsMove" class="notice danger">
       Native moving is not available in this browser. Execution remains disabled; there is no copy
       fallback.
     </p>
-    <p v-if="scanState" class="notice">{{ scanState }}</p>
+    <p v-if="scanState && !readingFiles" class="notice">{{ scanState }}</p>
     <p v-if="moveState" class="notice">{{ moveState }}</p>
 
-    <PlanTable
-      v-if="rows.length"
-      :rows="visibleRows"
-      :filter="filter"
-      :has-token="Boolean(token)"
-      @update:filter="filter = $event"
-      @select-match="selectMatch"
-      @update-target="updateTarget"
-      @set-enabled="setEnabled"
-    />
+    <div v-if="rows.length" class="plan-loading-container">
+      <PlanTable
+        :rows="rows"
+        :filter="filter"
+        :has-token="Boolean(token)"
+        @update:filter="filter = $event"
+        @select-match="selectMatch"
+        @update-target="updateTarget"
+        @set-enabled="setEnabled"
+      />
+      <div v-if="loadingTmdb" class="plan-loading-overlay" role="status">
+        <div>
+          <span class="loading-spinner" aria-hidden="true"></span><b>Loading TMDB details</b
+          ><small>Matching titles and episodes …</small>
+        </div>
+      </div>
+    </div>
     <ExecutionLog v-if="logs.length" :entries="logs" />
   </main>
   <main v-else>
     <SettingsPage
       :token="token"
       :root-folder="rootFolder"
-      :movies-base-folder="moviesBaseFolder"
-      :shows-base-folder="showsBaseFolder"
       :naming-presets="namingPresets"
       :active-naming-preset-id="activeNamingPresetId"
       @save="saveSettings"

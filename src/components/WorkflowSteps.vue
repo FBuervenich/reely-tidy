@@ -38,10 +38,10 @@ defineEmits<{ move: [] }>()
       </div>
       <button
         class="accent"
-        :disabled="!readyCount || moving || !supportsMove"
+        :disabled="!readyCount || moving || scanning || !supportsMove"
         @click="$emit('move')"
       >
-        {{ moving ? 'Moving …' : 'Move now' }}
+        {{ moving ? 'Moving …' : scanning ? 'Preparing …' : 'Move now' }}
       </button>
     </div>
   </section>

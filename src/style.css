@@ -206,6 +206,65 @@ h2 {
   color: #f0bbba;
   border-color: #dc7275;
 }
+.scan-loading {
+  display: flex;
+  min-height: 150px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  color: #b7c9e5;
+  font:
+    600 12px 'DM Mono',
+    monospace;
+  letter-spacing: 0.04em;
+}
+.loading-spinner {
+  display: inline-block;
+  width: 28px;
+  height: 28px;
+  border: 3px solid #2c4262;
+  border-top-color: #83adf2;
+  border-radius: 50%;
+  animation: loading-spin 0.8s linear infinite;
+}
+@keyframes loading-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.plan-loading-container {
+  position: relative;
+  display: flow-root;
+}
+.plan-loading-overlay {
+  position: absolute;
+  z-index: 10;
+  inset: 42px 0 0;
+  display: grid;
+  place-items: center;
+  border-radius: 14px;
+  background: rgb(8 14 23 / 76%);
+  backdrop-filter: blur(2px);
+}
+.plan-loading-overlay > div {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 24px 32px;
+  border: 1px solid #314966;
+  border-radius: 12px;
+  background: #121d2dcc;
+  box-shadow: 0 12px 36px #0007;
+}
+.plan-loading-overlay b {
+  font-size: 13px;
+}
+.plan-loading-overlay small {
+  color: #94a8c5;
+  font-size: 11px;
+}
 .plans {
   margin-top: 42px;
   max-width: 100%;
@@ -228,6 +287,11 @@ h2 {
 }
 .section-head h2 {
   font-size: 22px;
+}
+.plan-controls {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
 }
 .section-head nav {
   display: flex;
@@ -320,6 +384,10 @@ code {
   accent-color: #6394e7;
   margin: 2px 0 0;
 }
+th.selection-column input {
+  width: auto;
+  margin: 0;
+}
 .tmdb {
   min-width: 180px;
 }
@@ -405,6 +473,70 @@ dialog input {
 td input:focus,
 dialog input:focus {
   border-color: #6d9df0;
+}
+.destination-cell {
+  min-width: 260px;
+}
+.destination-preview {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  padding: 3px 0;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+}
+.destination-preview:hover:not(.locked) {
+  background: #17263a;
+  transform: none;
+}
+.destination-preview.locked {
+  cursor: default;
+}
+.destination-preview.locked:hover {
+  background: transparent;
+  transform: none;
+}
+.destination-folders,
+.destination-filename {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.destination-folders {
+  color: #8495af;
+  font:
+    10px 'DM Mono',
+    monospace;
+}
+.destination-filename {
+  margin-top: 5px;
+  color: #e1ebfa;
+  font:
+    600 11px 'DM Mono',
+    monospace;
+}
+.destination-pending {
+  display: block;
+  padding: 7px 0;
+  color: #7f8ea4;
+  font-size: 11px;
+  line-height: 1.4;
+}
+.destination-editor input {
+  min-width: 100%;
+}
+.destination-editor-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 7px;
+}
+.destination-editor-actions button {
+  padding: 6px 8px;
+  font-size: 10px;
 }
 .selection-column input {
   width: auto;
@@ -584,6 +716,24 @@ dialog input {
   display: grid;
   gap: 18px;
 }
+.settings-tabs {
+  display: flex;
+  gap: 5px;
+  width: fit-content;
+  padding: 4px;
+  border-radius: 10px;
+  background: #182230;
+}
+.settings-tabs button {
+  padding: 8px 11px;
+  background: transparent;
+  color: #94a4b9;
+  font-size: 12px;
+}
+.settings-tabs button.selected {
+  background: #30405a;
+  color: #edf4ff;
+}
 .settings-form fieldset {
   margin: 0;
   padding: 26px;
@@ -670,6 +820,10 @@ dialog input {
     width: 100%;
     overflow: auto;
   }
+  .plan-controls {
+    width: 100%;
+    align-items: stretch;
+  }
   .section-head nav button {
     white-space: nowrap;
   }
@@ -724,10 +878,15 @@ dialog input {
   margin: 0 0 15px;
   font-size: 14px;
 }
-.template-area + .template-area {
+.template-area {
   margin-top: 15px;
+}
+.template-area + .template-area {
   padding-top: 15px;
   border-top: 1px solid #26364a;
+}
+.template-preview {
+  margin-bottom: 0 !important;
 }
 .template-area-head {
   display: flex;

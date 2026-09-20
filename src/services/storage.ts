@@ -1,5 +1,10 @@
 import type { TmdbResult } from '../lib/tmdb'
-import { cloneNamingPreset, defaultNamingPreset, type NamingPreset } from '../lib/naming'
+import {
+  cloneNamingPreset,
+  defaultNamingPreset,
+  migratePresetBaseFolders,
+  type NamingPreset,
+} from '../lib/naming'
 
 const TOKEN_KEY = 'mediaRenamer.tmdbReadToken'
 const MAP_KEY = 'mediaRenamer.tmdbMappings'
@@ -12,8 +17,6 @@ const ACTIVE_PRESET_KEY = 'mediaRenamer.activeNamingPreset'
 export interface AppSettings {
   token: string
   rootFolder: string
-  moviesBaseFolder: string
-  showsBaseFolder: string
   namingPresets: NamingPreset[]
   activeNamingPresetId: string
 }
@@ -27,13 +30,13 @@ export function writeTmdbToken(token: string): void {
 }
 
 export function readSettings(): AppSettings {
-  const namingPresets = readNamingPresets()
+  const legacyMoviesBaseFolder = localStorage.getItem(MOVIES_FOLDER_KEY) ?? 'Movies'
+  const legacyShowsBaseFolder = localStorage.getItem(SHOWS_FOLDER_KEY) ?? 'Shows'
+  const namingPresets = readNamingPresets(legacyMoviesBaseFolder, legacyShowsBaseFolder)
   const savedActivePreset = localStorage.getItem(ACTIVE_PRESET_KEY)
   return {
     token: readTmdbToken(),
     rootFolder: localStorage.getItem(ROOT_FOLDER_KEY) ?? '_clean',
-    moviesBaseFolder: localStorage.getItem(MOVIES_FOLDER_KEY) ?? 'Movies',
-    showsBaseFolder: localStorage.getItem(SHOWS_FOLDER_KEY) ?? 'Shows',
     namingPresets,
     activeNamingPresetId: namingPresets.some((preset) => preset.id === savedActivePreset)
       ? savedActivePreset!
@@ -44,8 +47,6 @@ export function readSettings(): AppSettings {
 export function writeSettings(settings: AppSettings): void {
   writeTmdbToken(settings.token)
   localStorage.setItem(ROOT_FOLDER_KEY, settings.rootFolder)
-  localStorage.setItem(MOVIES_FOLDER_KEY, settings.moviesBaseFolder)
-  localStorage.setItem(SHOWS_FOLDER_KEY, settings.showsBaseFolder)
   localStorage.setItem(NAMING_PRESETS_KEY, JSON.stringify(settings.namingPresets))
   localStorage.setItem(ACTIVE_PRESET_KEY, settings.activeNamingPresetId)
 }
@@ -67,15 +68,17 @@ function isPreset(value: unknown): value is NamingPreset {
   )
 }
 
-function readNamingPresets(): NamingPreset[] {
+function readNamingPresets(movieBaseFolder: string, showsBaseFolder: string): NamingPreset[] {
   try {
     const stored = JSON.parse(localStorage.getItem(NAMING_PRESETS_KEY) ?? '[]')
     if (Array.isArray(stored) && stored.length && stored.every(isPreset))
-      return stored.map(cloneNamingPreset)
+      return stored.map((preset) =>
+        migratePresetBaseFolders(preset, movieBaseFolder, showsBaseFolder),
+      )
   } catch {
     /* Fall back to the original naming structure. */
   }
-  return [defaultNamingPreset()]
+  return [defaultNamingPreset(movieBaseFolder, showsBaseFolder)]
 }
 
 export function readMappings(): Record<string, TmdbResult> {

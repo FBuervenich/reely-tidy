@@ -18,6 +18,7 @@ export interface NamingTemplate {
 export interface NamingPreset {
   id: string
   name: string
+  version: number
   movie: NamingTemplate
   series: NamingTemplate
 }
@@ -32,6 +33,7 @@ export const TOKEN_LABELS: Record<TemplateToken, string> = {
 
 const defaultMovie: NamingTemplate = {
   folders: [
+    [{ id: 'movie-base-folder', type: 'text', value: 'Movies' }],
     [
       { id: 'movie-folder-title', type: 'token', token: 'title' },
       { id: 'movie-folder-open-year', type: 'text', value: ' (' },
@@ -49,6 +51,7 @@ const defaultMovie: NamingTemplate = {
 
 const defaultSeries: NamingTemplate = {
   folders: [
+    [{ id: 'series-base-folder', type: 'text', value: 'Shows' }],
     [
       { id: 'series-folder-title', type: 'token', token: 'title' },
       { id: 'series-folder-open-year', type: 'text', value: ' (' },
@@ -74,13 +77,37 @@ const defaultSeries: NamingTemplate = {
   ],
 }
 
-export function defaultNamingPreset(): NamingPreset {
-  return cloneNamingPreset({
+export function defaultNamingPreset(
+  movieBaseFolder = 'Movies',
+  showsBaseFolder = 'Shows',
+): NamingPreset {
+  const preset = cloneNamingPreset({
     id: 'standard',
     name: 'Standard',
+    version: 2,
     movie: defaultMovie,
     series: defaultSeries,
   })
+  preset.movie.folders[0][0].value = movieBaseFolder
+  preset.series.folders[0][0].value = showsBaseFolder
+  return preset
+}
+
+export function migratePresetBaseFolders(
+  preset: NamingPreset,
+  movieBaseFolder: string,
+  showsBaseFolder: string,
+): NamingPreset {
+  if (preset.version === 2) return cloneNamingPreset(preset)
+  const upgraded = cloneNamingPreset(preset)
+  upgraded.version = 2
+  upgraded.movie.folders.unshift([
+    { id: `${upgraded.id}-movie-base-folder`, type: 'text', value: movieBaseFolder || 'Movies' },
+  ])
+  upgraded.series.folders.unshift([
+    { id: `${upgraded.id}-series-base-folder`, type: 'text', value: showsBaseFolder || 'Shows' },
+  ])
+  return upgraded
 }
 
 export function cloneNamingPreset(preset: NamingPreset): NamingPreset {
@@ -129,7 +156,6 @@ export function renderPieces(pieces: TemplatePiece[], row: PlanRow, episodeTitle
 export function buildTarget(
   row: PlanRow,
   root: string,
-  baseFolder: string,
   template: NamingTemplate,
   episodeTitle?: string,
 ): string {
@@ -140,10 +166,5 @@ export function buildTarget(
   const extension = row.source.name.includes('.')
     ? row.source.name.slice(row.source.name.lastIndexOf('.') + 1).toLowerCase()
     : ''
-  return [
-    safeName(root) || '_clean',
-    safeName(baseFolder) || (row.kind === 'movie' ? 'Movies' : 'Shows'),
-    ...folders,
-    `${filename}.${extension}`,
-  ].join('/')
+  return [safeName(root) || '_clean', ...folders, `${filename}.${extension}`].join('/')
 }
