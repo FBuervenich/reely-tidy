@@ -1,8 +1,19 @@
-import { extensionOf, parseMediaName, SIDECAR_EXTENSIONS, stemOf, VIDEO_EXTENSIONS } from '../lib/media'
+import {
+  extensionOf,
+  parseMediaName,
+  SIDECAR_EXTENSIONS,
+  stemOf,
+  VIDEO_EXTENSIONS,
+} from '../lib/media'
 import { buildTarget, defaultNamingPreset, type NamingPreset } from '../lib/naming'
 import type { FoundFile, PlanRow } from '../types/plan'
 
-export interface BaseFolders { root: string; movies: string; shows: string; preset?: NamingPreset }
+export interface BaseFolders {
+  root: string
+  movies: string
+  shows: string
+  preset?: NamingPreset
+}
 
 export function createPlan(files: FoundFile[], baseFolders: BaseFolders): PlanRow[] {
   return files
@@ -20,7 +31,7 @@ export function createPlan(files: FoundFile[], baseFolders: BaseFolders): PlanRo
         target: '',
         enabled: parsed.kind !== 'unknown',
         searching: false,
-        state: parsed.kind === 'unknown' ? 'unrecognized' : 'ready'
+        state: parsed.kind === 'unknown' ? 'unrecognized' : 'ready',
       }
       rebuildTarget(row, undefined, baseFolders)
       return row
@@ -28,16 +39,23 @@ export function createPlan(files: FoundFile[], baseFolders: BaseFolders): PlanRo
 }
 
 function isMatchingSidecar(source: FoundFile, candidate: FoundFile): boolean {
-  if (candidate.parent !== source.parent || !SIDECAR_EXTENSIONS.has(extensionOf(candidate.name))) return false
+  if (candidate.parent !== source.parent || !SIDECAR_EXTENSIONS.has(extensionOf(candidate.name)))
+    return false
   const sourceName = source.name.toLocaleLowerCase()
   const candidateStem = stemOf(candidate.name).toLocaleLowerCase()
   return candidateStem === stemOf(source.name).toLocaleLowerCase() || candidateStem === sourceName
 }
 
-export function rebuildTarget(row: PlanRow, episodeTitle: string | undefined, baseFolders: BaseFolders): void {
+export function rebuildTarget(
+  row: PlanRow,
+  episodeTitle: string | undefined,
+  baseFolders: BaseFolders,
+): void {
   const preset = baseFolders.preset ?? defaultNamingPreset()
-  if (row.kind === 'movie') row.target = buildTarget(row, baseFolders.root, baseFolders.movies, preset.movie, episodeTitle)
-  else if (row.kind === 'series' && row.season && row.episode) row.target = buildTarget(row, baseFolders.root, baseFolders.shows, preset.series, episodeTitle)
+  if (row.kind === 'movie')
+    row.target = buildTarget(row, baseFolders.root, baseFolders.movies, preset.movie, episodeTitle)
+  else if (row.kind === 'series' && row.season && row.episode)
+    row.target = buildTarget(row, baseFolders.root, baseFolders.shows, preset.series, episodeTitle)
   else row.target = ''
 }
 
@@ -48,7 +66,11 @@ export function companionTargetName(row: PlanRow, originalName: string): string 
 }
 
 export function detectDuplicateTargets(rows: PlanRow[]): void {
-  for (const row of rows) if (row.state === 'conflict') { row.state = 'ready'; row.error = undefined }
+  for (const row of rows)
+    if (row.state === 'conflict') {
+      row.state = 'ready'
+      row.error = undefined
+    }
   const seen = new Map<string, PlanRow>()
   for (const row of rows) {
     if (['unrecognized', 'needs-choice', 'error'].includes(row.state) || !row.target) continue

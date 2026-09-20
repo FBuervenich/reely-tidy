@@ -18,7 +18,9 @@ export interface AppSettings {
   activeNamingPresetId: string
 }
 
-export function readTmdbToken(): string { return localStorage.getItem(TOKEN_KEY) ?? '' }
+export function readTmdbToken(): string {
+  return localStorage.getItem(TOKEN_KEY) ?? ''
+}
 export function writeTmdbToken(token: string): void {
   if (token) localStorage.setItem(TOKEN_KEY, token)
   else localStorage.removeItem(TOKEN_KEY)
@@ -33,7 +35,9 @@ export function readSettings(): AppSettings {
     moviesBaseFolder: localStorage.getItem(MOVIES_FOLDER_KEY) ?? 'Movies',
     showsBaseFolder: localStorage.getItem(SHOWS_FOLDER_KEY) ?? 'Shows',
     namingPresets,
-    activeNamingPresetId: namingPresets.some((preset) => preset.id === savedActivePreset) ? savedActivePreset! : namingPresets[0].id
+    activeNamingPresetId: namingPresets.some((preset) => preset.id === savedActivePreset)
+      ? savedActivePreset!
+      : namingPresets[0].id,
   }
 }
 
@@ -49,21 +53,37 @@ export function writeSettings(settings: AppSettings): void {
 function isPreset(value: unknown): value is NamingPreset {
   if (!value || typeof value !== 'object') return false
   const preset = value as Partial<NamingPreset>
-  return typeof preset.id === 'string' && typeof preset.name === 'string'
-    && Boolean(preset.movie && Array.isArray(preset.movie.folders) && Array.isArray(preset.movie.filename))
-    && Boolean(preset.series && Array.isArray(preset.series.folders) && Array.isArray(preset.series.filename))
+  return (
+    typeof preset.id === 'string' &&
+    typeof preset.name === 'string' &&
+    Boolean(
+      preset.movie && Array.isArray(preset.movie.folders) && Array.isArray(preset.movie.filename),
+    ) &&
+    Boolean(
+      preset.series &&
+      Array.isArray(preset.series.folders) &&
+      Array.isArray(preset.series.filename),
+    )
+  )
 }
 
 function readNamingPresets(): NamingPreset[] {
   try {
     const stored = JSON.parse(localStorage.getItem(NAMING_PRESETS_KEY) ?? '[]')
-    if (Array.isArray(stored) && stored.length && stored.every(isPreset)) return stored.map(cloneNamingPreset)
-  } catch { /* Fall back to the original naming structure. */ }
+    if (Array.isArray(stored) && stored.length && stored.every(isPreset))
+      return stored.map(cloneNamingPreset)
+  } catch {
+    /* Fall back to the original naming structure. */
+  }
   return [defaultNamingPreset()]
 }
 
 export function readMappings(): Record<string, TmdbResult> {
-  try { return JSON.parse(localStorage.getItem(MAP_KEY) ?? '{}') } catch { return {} }
+  try {
+    return JSON.parse(localStorage.getItem(MAP_KEY) ?? '{}')
+  } catch {
+    return {}
+  }
 }
 export function writeMapping(key: string, match: TmdbResult): void {
   const mappings = readMappings()

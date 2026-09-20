@@ -1,14 +1,35 @@
 import { computed, ref, type Ref } from 'vue'
 import { getEnglishTitle, getEpisode, type TmdbResult, searchTmdb } from '../lib/tmdb'
-import { companionTargetName, createPlan, detectDuplicateTargets, rebuildTarget, type BaseFolders } from '../services/plan-builder'
+import {
+  companionTargetName,
+  createPlan,
+  detectDuplicateTargets,
+  rebuildTarget,
+  type BaseFolders,
+} from '../services/plan-builder'
 import type { NamingPreset } from '../lib/naming'
-import { fileExists, getDestination, listFiles, moveFile, pickSourceFolder, supportsNativeMove } from '../services/file-system'
+import {
+  fileExists,
+  getDestination,
+  listFiles,
+  moveFile,
+  pickSourceFolder,
+  supportsNativeMove,
+} from '../services/file-system'
 import { readMappings, writeMapping } from '../services/storage'
 import type { MoveLog, PlanFilter, PlanRow } from '../types/plan'
 
-const errorMessage = (error: unknown) => error instanceof Error ? error.message : String(error)
+const errorMessage = (error: unknown) => (error instanceof Error ? error.message : String(error))
 
-export function useMediaPlan(token: Ref<string>, baseFolders: { root: Ref<string>; movies: Ref<string>; shows: Ref<string>; preset: Ref<NamingPreset> }) {
+export function useMediaPlan(
+  token: Ref<string>,
+  baseFolders: {
+    root: Ref<string>
+    movies: Ref<string>
+    shows: Ref<string>
+    preset: Ref<NamingPreset>
+  },
+) {
   const root = ref<FileSystemDirectoryHandle>()
   const rootName = ref('No folder selected')
   const rows = ref<PlanRow[]>([])
@@ -20,8 +41,12 @@ export function useMediaPlan(token: Ref<string>, baseFolders: { root: Ref<string
   const moving = ref(false)
   const supportsMove = supportsNativeMove()
 
-  const visibleRows = computed(() => filter.value === 'all' ? rows.value : rows.value.filter((row) => row.state === filter.value))
-  const readyCount = computed(() => rows.value.filter((row) => row.enabled && row.state === 'ready').length)
+  const visibleRows = computed(() =>
+    filter.value === 'all' ? rows.value : rows.value.filter((row) => row.state === filter.value),
+  )
+  const readyCount = computed(
+    () => rows.value.filter((row) => row.enabled && row.state === 'ready').length,
+  )
 
   async function chooseFolder(): Promise<boolean> {
     try {
@@ -42,7 +67,8 @@ export function useMediaPlan(token: Ref<string>, baseFolders: { root: Ref<string
         return false
       }
       if (exception.name === 'SecurityError') {
-        scanState.value = 'Folder access was blocked for security reasons. Open the app via http://localhost instead of a network address or file://.'
+        scanState.value =
+          'Folder access was blocked for security reasons. Open the app via http://localhost instead of a network address or file://.'
         return false
       }
       scanState.value = errorMessage(error)
@@ -62,12 +88,19 @@ export function useMediaPlan(token: Ref<string>, baseFolders: { root: Ref<string
     scanState.value = 'Reading files …'
     try {
       const baseFolders = currentBaseFolders()
-      rows.value = createPlan(await listFiles(root.value, { ignoredRootDirectories: [baseFolders.root] }), baseFolders)
-      if (token.value) await Promise.all(rows.value.filter((row) => row.kind !== 'unknown').map(enrich))
+      rows.value = createPlan(
+        await listFiles(root.value, { ignoredRootDirectories: [baseFolders.root] }),
+        baseFolders,
+      )
+      if (token.value)
+        await Promise.all(rows.value.filter((row) => row.kind !== 'unknown').map(enrich))
       detectDuplicateTargets(rows.value)
       scanState.value = ''
-    } catch (error) { scanState.value = `Scan failed: ${errorMessage(error)}` }
-    finally { scanning.value = false }
+    } catch (error) {
+      scanState.value = `Scan failed: ${errorMessage(error)}`
+    } finally {
+      scanning.value = false
+    }
   }
 
   async function enrich(row: PlanRow): Promise<void> {
@@ -76,16 +109,28 @@ export function useMediaPlan(token: Ref<string>, baseFolders: { root: Ref<string
     row.error = undefined
     try {
       const cached = readMappings()[row.identityKey]
-      if (cached) { await selectMatch(row, cached, false); return }
-      row.candidates = await searchTmdb(row.kind === 'movie' ? 'movie' : 'tv', row.title, row.year, token.value)
+      if (cached) {
+        await selectMatch(row, cached, false)
+        return
+      }
+      row.candidates = await searchTmdb(
+        row.kind === 'movie' ? 'movie' : 'tv',
+        row.title,
+        row.year,
+        token.value,
+      )
       if (row.candidates.length === 1) await selectMatch(row, row.candidates[0])
       else if (row.candidates.length > 1) {
         row.state = 'needs-choice'
         row.target = ''
         row.error = 'Select the correct TMDB match.'
       } else row.error = 'No TMDB match — using the filename suggestion.'
-    } catch (error) { row.state = 'error'; row.error = errorMessage(error) }
-    finally { row.searching = false }
+    } catch (error) {
+      row.state = 'error'
+      row.error = errorMessage(error)
+    } finally {
+      row.searching = false
+    }
   }
 
   async function selectMatch(row: PlanRow, match: TmdbResult, remember = true): Promise<void> {
@@ -98,7 +143,11 @@ export function useMediaPlan(token: Ref<string>, baseFolders: { root: Ref<string
     rebuildTarget(row, undefined, currentBaseFolders())
     if (token.value) {
       try {
-        row.targetTitle = await getEnglishTitle(row.kind === 'movie' ? 'movie' : 'tv', match.id, token.value)
+        row.targetTitle = await getEnglishTitle(
+          row.kind === 'movie' ? 'movie' : 'tv',
+          match.id,
+          token.value,
+        )
       } catch (error) {
         row.error = `English title could not be loaded: ${errorMessage(error)}`
       }
@@ -119,14 +168,25 @@ export function useMediaPlan(token: Ref<string>, baseFolders: { root: Ref<string
 
   function updateTarget(row: PlanRow, target: string): void {
     row.target = target
-    if (target.trim()) { row.state = 'ready'; row.error = undefined; detectDuplicateTargets(rows.value) }
+    if (target.trim()) {
+      row.state = 'ready'
+      row.error = undefined
+      detectDuplicateTargets(rows.value)
+    }
   }
 
   function currentBaseFolders(): BaseFolders {
-    return { root: baseFolders.root.value, movies: baseFolders.movies.value, shows: baseFolders.shows.value, preset: baseFolders.preset.value }
+    return {
+      root: baseFolders.root.value,
+      movies: baseFolders.movies.value,
+      shows: baseFolders.shows.value,
+      preset: baseFolders.preset.value,
+    }
   }
 
-  function setEnabled(row: PlanRow, enabled: boolean): void { row.enabled = enabled }
+  function setEnabled(row: PlanRow, enabled: boolean): void {
+    row.enabled = enabled
+  }
 
   function resetPlanForSettingsChange(): void {
     if (!rows.value.length) return
@@ -136,7 +196,9 @@ export function useMediaPlan(token: Ref<string>, baseFolders: { root: Ref<string
     scanState.value = 'Settings changed. Scan again so the dry run uses the new folder structure.'
   }
 
-  function releaseAccess(message = 'Folder access has been released in the app. Choose the folder again for another scan.'): void {
+  function releaseAccess(
+    message = 'Folder access has been released in the app. Choose the folder again for another scan.',
+  ): void {
     // FileSystemDirectoryHandle has no close() API. Clearing every app reference is the
     // strongest release possible; the browser can then reclaim its native resources.
     root.value = undefined
@@ -148,7 +210,8 @@ export function useMediaPlan(token: Ref<string>, baseFolders: { root: Ref<string
 
   async function moveAll(): Promise<void> {
     if (!supportsMove) {
-      moveState.value = 'This Chromium browser does not support native moving through the File System Access API. No files were changed.'
+      moveState.value =
+        'This Chromium browser does not support native moving through the File System Access API. No files were changed.'
       return
     }
     if (!root.value) return
@@ -160,11 +223,15 @@ export function useMediaPlan(token: Ref<string>, baseFolders: { root: Ref<string
     try {
       for (const row of candidates) {
         const destination = await getDestination(root.value, row.target)
-        const names = [destination.name, ...row.sidecars.map((file) => companionTargetName(row, file.name))]
-        for (const name of names) if (await fileExists(destination.folder, name)) {
-          row.state = 'conflict'
-          row.error = `Destination file already exists: ${name}`
-        }
+        const names = [
+          destination.name,
+          ...row.sidecars.map((file) => companionTargetName(row, file.name)),
+        ]
+        for (const name of names)
+          if (await fileExists(destination.folder, name)) {
+            row.state = 'conflict'
+            row.error = `Destination file already exists: ${name}`
+          }
       }
       const permitted = candidates.filter((row) => row.state === 'ready')
       if (!permitted.length) {
@@ -175,22 +242,59 @@ export function useMediaPlan(token: Ref<string>, baseFolders: { root: Ref<string
         try {
           const destination = await getDestination(root.value, row.target)
           await moveFile(row.source.handle, destination.folder, destination.name)
-          for (const sidecar of row.sidecars) await moveFile(sidecar.handle, destination.folder, companionTargetName(row, sidecar.name))
+          for (const sidecar of row.sidecars)
+            await moveFile(
+              sidecar.handle,
+              destination.folder,
+              companionTargetName(row, sidecar.name),
+            )
           row.state = 'done'
           logs.value.push({ source: row.source.path, target: row.target, result: 'Moved' })
         } catch (error) {
           row.state = 'error'
           row.error = `Move was denied: ${errorMessage(error)}`
-          logs.value.push({ source: row.source.path, target: row.target, result: 'Error', message: row.error })
+          logs.value.push({
+            source: row.source.path,
+            target: row.target,
+            result: 'Error',
+            message: row.error,
+          })
         }
       }
-      const allSucceeded = logs.value.length === permitted.length && logs.value.every((entry) => entry.result === 'Moved')
+      const allSucceeded =
+        logs.value.length === permitted.length &&
+        logs.value.every((entry) => entry.result === 'Moved')
       if (allSucceeded) {
-        releaseAccess('Execution complete and folder access has been released in the app. The local log remains visible.')
+        releaseAccess(
+          'Execution complete and folder access has been released in the app. The local log remains visible.',
+        )
       } else moveState.value = 'Execution complete. See the local log for details.'
-    } catch (error) { moveState.value = `Execution stopped: ${errorMessage(error)}` }
-    finally { moving.value = false }
+    } catch (error) {
+      moveState.value = `Execution stopped: ${errorMessage(error)}`
+    } finally {
+      moving.value = false
+    }
   }
 
-  return { root, rootName, rows, logs, filter, scanState, moveState, scanning, moving, supportsMove, visibleRows, readyCount, chooseAndScan, selectMatch, updateTarget, setEnabled, resetPlanForSettingsChange, releaseAccess, moveAll }
+  return {
+    root,
+    rootName,
+    rows,
+    logs,
+    filter,
+    scanState,
+    moveState,
+    scanning,
+    moving,
+    supportsMove,
+    visibleRows,
+    readyCount,
+    chooseAndScan,
+    selectMatch,
+    updateTarget,
+    setEnabled,
+    resetPlanForSettingsChange,
+    releaseAccess,
+    moveAll,
+  }
 }

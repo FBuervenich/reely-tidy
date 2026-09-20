@@ -17,11 +17,34 @@ export function useSettings() {
     showsBaseFolder.value = settings.showsBaseFolder.trim() || 'Shows'
     namingPresets.value = settings.namingPresets
     activeNamingPresetId.value = settings.activeNamingPresetId
-    writeSettings({ token: token.value, rootFolder: rootFolder.value, moviesBaseFolder: moviesBaseFolder.value, showsBaseFolder: showsBaseFolder.value, namingPresets: namingPresets.value, activeNamingPresetId: activeNamingPresetId.value })
+    writeSettings({
+      token: token.value,
+      rootFolder: rootFolder.value,
+      moviesBaseFolder: moviesBaseFolder.value,
+      showsBaseFolder: showsBaseFolder.value,
+      namingPresets: namingPresets.value,
+      activeNamingPresetId: activeNamingPresetId.value,
+    })
   }
   function deleteToken(): void {
-    save({ token: '', rootFolder: rootFolder.value, moviesBaseFolder: moviesBaseFolder.value, showsBaseFolder: showsBaseFolder.value, namingPresets: namingPresets.value, activeNamingPresetId: activeNamingPresetId.value })
+    save({
+      token: '',
+      rootFolder: rootFolder.value,
+      moviesBaseFolder: moviesBaseFolder.value,
+      showsBaseFolder: showsBaseFolder.value,
+      namingPresets: namingPresets.value,
+      activeNamingPresetId: activeNamingPresetId.value,
+    })
   }
 
-  return { token, rootFolder, moviesBaseFolder, showsBaseFolder, namingPresets, activeNamingPresetId, save, deleteToken }
+  return {
+    token,
+    rootFolder,
+    moviesBaseFolder,
+    showsBaseFolder,
+    namingPresets,
+    activeNamingPresetId,
+    save,
+    deleteToken,
+  }
 }

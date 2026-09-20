@@ -1,12 +1,18 @@
 {
   "name": "reel-tidy",
-  "private": true,
   "version": "0.1.0",
+  "private": true,
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "vue-tsc -b && vite build",
-    "preview": "vite preview"
+    "dev": "vp dev",
+    "build": "vue-tsc -b && vp build",
+    "preview": "vp preview",
+    "check": "vp check",
+    "check:fix": "vp check --fix",
+    "lint": "vp lint",
+    "format": "vp fmt",
+    "format:check": "vp fmt --check",
+    "prepare": "vp config --no-agent"
   },
   "dependencies": {
     "vue": "3.5.43"
@@ -14,7 +20,18 @@
   "devDependencies": {
     "@vitejs/plugin-vue": "6.0.9",
     "typescript": "5.7.3",
-    "vite": "8.3.0",
+    "vite": "npm:@voidzero-dev/vite-plus-core@0.3.3",
+    "vite-plus": "0.3.3",
     "vue-tsc": "3.3.11"
+  },
+  "overrides": {
+    "vite": "npm:@voidzero-dev/vite-plus-core@0.3.3"
+  },
+  "devEngines": {
+    "packageManager": {
+      "name": "npm",
+      "version": "11.13.0",
+      "onFail": "download"
+    }
   }
 }
