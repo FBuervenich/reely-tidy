@@ -1,7 +1,15 @@
-import { pad, safeName } from './media'
+import { pad, safeName, stemOf } from './media'
 import type { PlanRow } from '../types/plan'
 
-export type TemplateToken = 'title' | 'year' | 'season' | 'episode' | 'episodeTitle'
+export type TemplateToken =
+  | 'title'
+  | 'year'
+  | 'season'
+  | 'episode'
+  | 'episodeTitle'
+  | 'sceneTags'
+  | 'releaseGroup'
+  | 'sourceName'
 
 export interface TemplatePiece {
   id: string
@@ -29,6 +37,9 @@ export const TOKEN_LABELS: Record<TemplateToken, string> = {
   season: 'Season',
   episode: 'Episode',
   episodeTitle: 'Episode title',
+  sceneTags: 'Scene tags ({sceneTags})',
+  releaseGroup: 'Release group ({releaseGroup})',
+  sourceName: 'Original filename ({sourceName})',
 }
 
 const defaultMovie: NamingTemplate = {
@@ -115,6 +126,67 @@ export function cloneNamingPreset(preset: NamingPreset): NamingPreset {
   return JSON.parse(JSON.stringify(preset)) as NamingPreset
 }
 
+const TECHNICAL_MARKER =
+  /(?:^|[ ._-])(?:2160p|1080p|720p|576p|480p|web[ ._-]?dl|webrip|blu[ ._-]?ray|brrip|dvdrip|remux|x26[45]|h[ ._-]?26[45]|hevc|av1|aac|ac-?3|e-?ac-?3|dts(?:-?hd)?|truehd|atmos|hdr(?:10(?:\+)?|10\+)?|dolby[ ._-]?vision|dv)(?=$|[ ._-])/i
+
+const LANGUAGE_TAGS = new Set([
+  'de',
+  'en',
+  'ger',
+  'eng',
+  'german',
+  'deutsch',
+  'english',
+  'french',
+  'fr',
+  'spanish',
+  'es',
+  'italian',
+  'it',
+  'japanese',
+  'jp',
+  'jpn',
+  'korean',
+  'kr',
+  'kor',
+  'multi',
+  'dl',
+  'dubbed',
+])
+
+/**
+ * Extract the release suffix only once a known technical marker is encountered.
+ * A contiguous language prefix (for example `GERMAN.DL`) is retained when it
+ * contains at least two recognised language/release tokens.
+ */
+export function sceneTagsForFile(fileName: string): string {
+  const stem = stemOf(fileName)
+  const marker = TECHNICAL_MARKER.exec(stem)
+  if (!marker || marker.index === undefined) return ''
+
+  const markerStart = marker.index + marker[0].lastIndexOf(marker[0].trimStart())
+  const prefix = stem.slice(0, markerStart)
+  const words = [...prefix.matchAll(/[A-Za-z0-9]+/g)]
+  let languageStart = markerStart
+  let languageCount = 0
+
+  for (let index = words.length - 1; index >= 0; index -= 1) {
+    const word = words[index]
+    if (!LANGUAGE_TAGS.has(word[0].toLowerCase())) break
+    languageStart = word.index!
+    languageCount += 1
+  }
+
+  const start = languageCount >= 2 ? languageStart : markerStart
+  return safeName(stem.slice(start).replace(/[._]+/g, ' ').replace(/\s+/g, ' ').trim())
+}
+
+export function releaseGroupForFile(fileName: string): string {
+  if (!sceneTagsForFile(fileName)) return ''
+  const group = stemOf(fileName).match(/-([A-Za-z0-9][A-Za-z0-9._-]*)$/)
+  return group ? safeName(group[1]) : ''
+}
+
 function tokenValue(token: TemplateToken | undefined, row: PlanRow, episodeTitle?: string): string {
   const title = safeName(row.targetTitle || row.title) || 'Unknown Title'
   switch (token) {
@@ -128,6 +200,12 @@ function tokenValue(token: TemplateToken | undefined, row: PlanRow, episodeTitle
       return row.episode ? pad(row.episode) : ''
     case 'episodeTitle':
       return safeName(episodeTitle || (row.episode ? `Episode ${pad(row.episode)}` : ''))
+    case 'sceneTags':
+      return sceneTagsForFile(row.source.name)
+    case 'releaseGroup':
+      return releaseGroupForFile(row.source.name)
+    case 'sourceName':
+      return stemOf(row.source.name)
     default:
       return ''
   }
@@ -144,13 +222,27 @@ function tidyValue(value: string): string {
 }
 
 export function renderPieces(pieces: TemplatePiece[], row: PlanRow, episodeTitle?: string): string {
-  return tidyValue(
-    pieces
-      .map((piece) =>
-        piece.type === 'token' ? tokenValue(piece.token, row, episodeTitle) : piece.value || '',
-      )
-      .join(''),
-  )
+  const emptyToken = '\uE000'
+  let rendered = pieces
+    .map((piece) => {
+      if (piece.type === 'text') return piece.value || ''
+      return tokenValue(piece.token, row, episodeTitle) || emptyToken
+    })
+    .join('')
+
+  // Square brackets in fixed text create an optional template block. Work from
+  // the inside out so nested blocks behave predictably as well.
+  while (true) {
+    const open = rendered.lastIndexOf('[')
+    const close = open === -1 ? -1 : rendered.indexOf(']', open)
+    if (open === -1 || close === -1) break
+    const content = rendered.slice(open + 1, close)
+    rendered = `${rendered.slice(0, open)}${
+      content.includes(emptyToken) ? emptyToken : content
+    }${rendered.slice(close + 1)}`
+  }
+
+  return tidyValue(rendered.replaceAll(emptyToken, ''))
 }
 
 export function buildTarget(

@@ -157,6 +157,12 @@ function clearToken(): void {
             Build movie and show paths from as many subfolders and filename blocks as you need. The
             “Standard” preset preserves ReelTidy’s original layout.
           </p>
+          <p>
+            <code>Scene tags</code> starts at a recognised technical marker (such as 2160p, WEB-DL,
+            BluRay, HEVC, AAC, DTS, or HDR), not immediately after the title. Put square brackets in
+            fixed-text blocks to make a section optional: <code>[ - </code> + Scene tags +
+            <code>]</code> renders the separator only when tags were found.
+          </p>
           <div class="preset-controls">
             <label
               >Active preset<select v-model="activePresetDraftId">
@@ -191,14 +197,23 @@ function clearToken(): void {
             <NamingTemplateBuilder
               title="Movies"
               :template="selectedPreset.movie"
-              :allowed-tokens="['title', 'year']"
+              :allowed-tokens="['title', 'year', 'sceneTags', 'releaseGroup', 'sourceName']"
               :preview="moviePreview"
               @update:template="updateTemplate('movie', $event)"
             />
             <NamingTemplateBuilder
               title="Shows"
               :template="selectedPreset.series"
-              :allowed-tokens="['title', 'year', 'season', 'episode', 'episodeTitle']"
+              :allowed-tokens="[
+                'title',
+                'year',
+                'season',
+                'episode',
+                'episodeTitle',
+                'sceneTags',
+                'releaseGroup',
+                'sourceName',
+              ]"
               :preview="seriesPreview"
               @update:template="updateTemplate('series', $event)"
             />

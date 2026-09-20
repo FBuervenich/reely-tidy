@@ -33,6 +33,14 @@ function removeFolder(index: number): void {
   template.folders.splice(index, 1)
   update(template)
 }
+function moveFolder(index: number, offset: -1 | 1): void {
+  const destination = index + offset
+  if (destination < 0 || destination >= props.template.folders.length) return
+  const template = copy()
+  const [folder] = template.folders.splice(index, 1)
+  template.folders.splice(destination, 0, folder)
+  update(template)
+}
 function addPiece(area: 'folder' | 'filename', token?: TemplateToken, folderIndex?: number): void {
   const template = copy()
   const piece: TemplatePiece = token
@@ -136,9 +144,31 @@ function updateText(
             + Text
           </button>
         </div>
-        <button type="button" class="remove-folder" @click="removeFolder(folderIndex)">
-          Remove folder
-        </button>
+        <div class="folder-actions">
+          <button
+            type="button"
+            class="move-folder"
+            aria-label="Move folder up"
+            title="Move folder up"
+            :disabled="folderIndex === 0"
+            @click="moveFolder(folderIndex, -1)"
+          >
+            ↑
+          </button>
+          <button
+            type="button"
+            class="move-folder"
+            aria-label="Move folder down"
+            title="Move folder down"
+            :disabled="folderIndex === template.folders.length - 1"
+            @click="moveFolder(folderIndex, 1)"
+          >
+            ↓
+          </button>
+          <button type="button" class="remove-folder" @click="removeFolder(folderIndex)">
+            Remove folder
+          </button>
+        </div>
       </div>
     </div>
     <div class="template-area">

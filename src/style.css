@@ -976,6 +976,12 @@ dialog input {
   padding: 6px;
   font-size: 11px;
 }
+.folder-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.move-folder,
 .remove-folder {
   align-self: start;
   padding: 7px 0;
@@ -984,6 +990,20 @@ dialog input {
   font-size: 11px;
   white-space: nowrap;
 }
+.move-folder {
+  min-width: 23px;
+  padding: 5px 4px;
+  font-size: 14px;
+}
+.move-folder:disabled {
+  cursor: not-allowed;
+  opacity: 0.35;
+}
+.move-folder:disabled:hover {
+  background: transparent;
+  transform: none;
+}
+.move-folder:hover,
 .remove-folder:hover {
   color: #ffc1be;
   background: transparent;

@@ -40,8 +40,13 @@ function isMatchingSidecar(source: FoundFile, candidate: FoundFile): boolean {
   if (candidate.parent !== source.parent || !SIDECAR_EXTENSIONS.has(extensionOf(candidate.name)))
     return false
   const sourceName = source.name.toLocaleLowerCase()
+  const sourceStem = stemOf(source.name).toLocaleLowerCase()
   const candidateStem = stemOf(candidate.name).toLocaleLowerCase()
-  return candidateStem === stemOf(source.name).toLocaleLowerCase() || candidateStem === sourceName
+  return (
+    candidateStem === sourceStem ||
+    candidateStem === sourceName ||
+    candidateStem.startsWith(`${sourceStem}.`)
+  )
 }
 
 export function rebuildTarget(
@@ -60,7 +65,12 @@ export function rebuildTarget(
 export function companionTargetName(row: PlanRow, originalName: string): string {
   const targetName = row.target.split('/').pop()
   if (!targetName) throw new Error('Invalid destination path for sidecar file.')
-  return `${targetName.replace(/\.[^.]+$/, '')}.${extensionOf(originalName)}`
+  const sourceStem = stemOf(row.source.name)
+  const sidecarStem = stemOf(originalName)
+  const qualifier = sidecarStem.toLocaleLowerCase().startsWith(`${sourceStem.toLocaleLowerCase()}.`)
+    ? sidecarStem.slice(sourceStem.length)
+    : ''
+  return `${targetName.replace(/\.[^.]+$/, '')}${qualifier}.${extensionOf(originalName)}`
 }
 
 export function detectDuplicateTargets(rows: PlanRow[]): void {

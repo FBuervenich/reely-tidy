@@ -1,10 +1,5 @@
 import type { TmdbResult } from '../lib/tmdb'
-import {
-  cloneNamingPreset,
-  defaultNamingPreset,
-  migratePresetBaseFolders,
-  type NamingPreset,
-} from '../lib/naming'
+import { defaultNamingPreset, migratePresetBaseFolders, type NamingPreset } from '../lib/naming'
 
 const TOKEN_KEY = 'mediaRenamer.tmdbReadToken'
 const MAP_KEY = 'mediaRenamer.tmdbMappings'
