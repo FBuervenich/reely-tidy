@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, nextTick, ref } from 'vue'
 import { pad } from '../lib/media'
 import { posterUrl, type TmdbResult } from '../lib/tmdb'
 import type { PlanFilter, PlanRow } from '../types/plan'
@@ -27,6 +27,7 @@ const statusLabels = {
 }
 const props = defineProps<{ rows: PlanRow[]; filter: PlanFilter; hasToken: boolean }>()
 const editingDestination = ref<{ id: string; target: string }>()
+const destinationDialog = ref<HTMLDialogElement>()
 const copiedDestination = ref('')
 const filteredRows = computed(() =>
   props.filter === 'all' ? props.rows : props.rows.filter((row) => row.state === props.filter),
@@ -38,6 +39,11 @@ const allSelectableRowsSelected = computed(
 )
 const someSelectableRowsSelected = computed(
   () => selectableRows.value.some((row) => row.enabled) && !allSelectableRowsSelected.value,
+)
+const editingRow = computed(() =>
+  editingDestination.value
+    ? props.rows.find((row) => row.id === editingDestination.value?.id)
+    : undefined,
 )
 const groups = computed(() => {
   const definitions: { key: PlanRow['kind']; label: string }[] = [
@@ -63,17 +69,24 @@ function destinationParts(target: string): { folders: string; filename: string }
   const parts = target.split('/').filter(Boolean)
   return { folders: parts.slice(0, -1).join(' / '), filename: parts.at(-1) ?? '' }
 }
-function startEditingDestination(row: PlanRow): void {
-  if (row.state !== 'done' && row.target)
-    editingDestination.value = { id: row.id, target: row.target }
+async function startEditingDestination(row: PlanRow): Promise<void> {
+  if (row.state === 'done' || !row.target) return
+
+  editingDestination.value = { id: row.id, target: row.target }
+  await nextTick()
+  destinationDialog.value?.showModal()
 }
-function saveDestination(row: PlanRow): void {
-  if (!editingDestination.value) return
-  emit('updateTarget', row, editingDestination.value.target)
-  editingDestination.value = undefined
+function saveDestination(): void {
+  if (!editingDestination.value || !editingRow.value) return
+  emit('updateTarget', editingRow.value, editingDestination.value.target)
+  destinationDialog.value?.close()
 }
 function cancelEditingDestination(): void {
+  destinationDialog.value?.close()
+}
+function clearDestinationEditor(): void {
   editingDestination.value = undefined
+  copiedDestination.value = ''
 }
 async function copyDestination(target: string): Promise<void> {
   try {
@@ -104,6 +117,14 @@ async function copyDestination(target: string): Promise<void> {
     </div>
     <div class="table-wrap">
       <table>
+        <colgroup>
+          <col class="selection-column" />
+          <col class="source-column" />
+          <col class="detected-column" />
+          <col class="tmdb-column" />
+          <col class="destination-column" />
+          <col class="status-column" />
+        </colgroup>
         <thead>
           <tr>
             <th class="selection-column">
@@ -196,24 +217,7 @@ async function copyDestination(target: string): Promise<void> {
             </td>
             <td class="destination-cell">
               <div v-if="row.target" class="destination">
-                <div v-if="editingDestination?.id === row.id" class="destination-editor">
-                  <input
-                    v-model="editingDestination.target"
-                    aria-label="Destination path"
-                    autofocus
-                    @keydown.enter.prevent="saveDestination(row)"
-                    @keydown.esc.prevent="cancelEditingDestination"
-                  />
-                  <div class="destination-editor-actions">
-                    <button type="button" @click="copyDestination(editingDestination.target)">
-                      {{ copiedDestination === editingDestination.target ? 'Copied' : 'Copy path' }}
-                    </button>
-                    <button type="button" class="accent" @click="saveDestination(row)">Save</button>
-                    <button type="button" @click="cancelEditingDestination">Cancel</button>
-                  </div>
-                </div>
                 <button
-                  v-else
                   type="button"
                   class="destination-preview"
                   :class="{ locked: row.state === 'done' }"
@@ -236,5 +240,25 @@ async function copyDestination(target: string): Promise<void> {
         </tbody>
       </table>
     </div>
+    <dialog ref="destinationDialog" class="destination-dialog" @close="clearDestinationEditor">
+      <form v-if="editingDestination" @submit.prevent="saveDestination">
+        <p class="eyebrow">DESTINATION</p>
+        <h2>Edit destination</h2>
+        <p>Change the full relative path. The file stays inside the selected source folder.</p>
+        <label>
+          Destination path
+          <input v-model="editingDestination.target" autofocus aria-label="Destination path" />
+        </label>
+        <div class="dialog-actions">
+          <button type="button" @click="copyDestination(editingDestination.target)">
+            {{ copiedDestination === editingDestination.target ? 'Copied' : 'Copy path' }}
+          </button>
+          <span>
+            <button type="button" @click="cancelEditingDestination">Cancel</button>
+            <button class="accent" type="submit">Save</button>
+          </span>
+        </div>
+      </form>
+    </dialog>
   </section>
 </template>

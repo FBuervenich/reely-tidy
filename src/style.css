@@ -314,14 +314,34 @@ h2 {
   width: 100%;
   max-width: 100%;
   max-height: min(70vh, 760px);
-  overflow: auto;
+  overflow-x: hidden;
+  overflow-y: auto;
   overscroll-behavior: contain;
   border-radius: 0 0 14px 14px;
 }
 table {
   width: 100%;
+  min-width: 0;
   border-collapse: collapse;
-  min-width: 1080px;
+  table-layout: fixed;
+}
+col.selection-column {
+  width: 48px;
+}
+col.source-column {
+  width: calc((100% - 152px - 26%) / 2);
+}
+col.detected-column {
+  width: 12%;
+}
+col.tmdb-column {
+  width: 14%;
+}
+col.destination-column {
+  width: calc((100% - 152px - 26%) / 2);
+}
+col.status-column {
+  width: 104px;
 }
 thead th {
   position: sticky;
@@ -337,12 +357,15 @@ th {
   text-transform: uppercase;
   padding: 14px 18px;
   background: #0e1621;
+  overflow-wrap: anywhere;
 }
 td {
+  min-width: 0;
   padding: 16px 18px;
   border-top: 1px solid #202c3d;
   vertical-align: top;
   font-size: 12px;
+  overflow-wrap: anywhere;
 }
 .media-group th {
   padding: 10px 18px;
@@ -367,6 +390,7 @@ td small,
   line-height: 1.45;
 }
 code {
+  display: block;
   font:
     11px 'DM Mono',
     monospace;
@@ -374,8 +398,8 @@ code {
   overflow-wrap: anywhere;
 }
 .selection-column {
-  width: 56px;
-  min-width: 56px;
+  width: 48px;
+  min-width: 48px;
   padding-left: 14px;
   padding-right: 8px;
   text-align: center;
@@ -389,7 +413,7 @@ th.selection-column input {
   margin: 0;
 }
 .tmdb {
-  min-width: 180px;
+  min-width: 0;
 }
 .tmdb-match {
   position: relative;
@@ -407,7 +431,8 @@ th.selection-column input {
 }
 .tmdb-match > div b {
   display: block;
-  max-width: 150px;
+  max-width: 100%;
+  overflow-wrap: anywhere;
 }
 .tmdb-tooltip {
   position: absolute;
@@ -457,6 +482,7 @@ th.selection-column input {
 }
 .tmdb select {
   width: 100%;
+  min-width: 0;
   font-size: 11px;
 }
 td input,
@@ -475,7 +501,7 @@ dialog input:focus {
   border-color: #6d9df0;
 }
 .destination-cell {
-  min-width: 260px;
+  min-width: 0;
 }
 .destination-preview {
   display: block;
@@ -526,18 +552,6 @@ dialog input:focus {
   font-size: 11px;
   line-height: 1.4;
 }
-.destination-editor input {
-  min-width: 100%;
-}
-.destination-editor-actions {
-  display: flex;
-  gap: 6px;
-  margin-top: 7px;
-}
-.destination-editor-actions button {
-  padding: 6px 8px;
-  font-size: 10px;
-}
 .selection-column input {
   width: auto;
   padding: 0;
@@ -546,10 +560,12 @@ dialog input:focus {
 }
 .status {
   display: inline-block;
+  max-width: 100%;
   border-radius: 20px;
   padding: 4px 8px;
   font: 10px 'DM Mono';
-  white-space: nowrap;
+  overflow-wrap: anywhere;
+  text-align: center;
 }
 .status.ready {
   background: #193c32;
@@ -654,6 +670,16 @@ dialog input {
   justify-content: space-between;
   gap: 10px;
   margin-top: 25px;
+}
+.dialog-actions > span {
+  display: flex;
+  gap: 10px;
+}
+.destination-dialog {
+  width: min(760px, calc(100% - 28px));
+}
+.destination-dialog input {
+  font-family: 'DM Mono', monospace;
 }
 .quiet {
   background: transparent;
@@ -826,6 +852,92 @@ dialog input {
   }
   .section-head nav button {
     white-space: nowrap;
+  }
+  .selection-column {
+    width: 42px;
+    min-width: 42px;
+    padding-left: 8px;
+    padding-right: 6px;
+  }
+  th,
+  td {
+    padding: 12px 10px;
+  }
+  .media-group th {
+    padding: 10px;
+  }
+  col.selection-column {
+    width: 42px;
+  }
+  col.source-column {
+    width: calc((100% - 120px - 27%) / 2);
+  }
+  col.detected-column {
+    width: 12%;
+  }
+  col.tmdb-column {
+    width: 15%;
+  }
+  col.destination-column {
+    width: calc((100% - 120px - 27%) / 2);
+  }
+  col.status-column {
+    width: 78px;
+  }
+  .tmdb-match > img {
+    display: none;
+  }
+}
+@media (max-width: 520px) {
+  .plans {
+    border-left: 0;
+    border-right: 0;
+    border-radius: 0;
+  }
+  .section-head {
+    padding-left: 18px;
+    padding-right: 18px;
+  }
+  th,
+  td {
+    padding: 10px 7px;
+    font-size: 11px;
+  }
+  .media-group th {
+    padding: 9px 12px;
+  }
+  .selection-column {
+    width: 34px;
+    min-width: 34px;
+    padding-left: 5px;
+    padding-right: 4px;
+  }
+  col.selection-column {
+    width: 34px;
+  }
+  col.source-column {
+    width: calc((100% - 100px - 30%) / 2);
+  }
+  col.detected-column {
+    width: 14%;
+  }
+  col.tmdb-column {
+    width: 16%;
+  }
+  col.destination-column {
+    width: calc((100% - 100px - 30%) / 2);
+  }
+  col.status-column {
+    width: 66px;
+  }
+  .destination-filename,
+  .destination-folders,
+  code {
+    font-size: 9px;
+  }
+  .status {
+    padding: 3px 5px;
+    font-size: 9px;
   }
 }
 .preset-controls {
