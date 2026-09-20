@@ -1,4 +1,4 @@
-# ReelyTidy
+# 🎬🧹 ReelyTidy
 
 ReelyTidy is a private, browser-based media organizer. It scans a folder of movies and TV shows, looks up metadata with [TMDB](https://www.themoviedb.org/), and creates a reviewable rename and move plan before changing any files.
 **No installation required:** open ReelyTidy in a supported browser and use it right away. It runs directly in current Chromium-based browsers, with no desktop app or server to install.
