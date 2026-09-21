@@ -4,6 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "test": "vp test run",
+    "test:watch": "vp test",
     "dev": "vp dev",
     "build": "vue-tsc -b && vp build",
     "preview": "vp preview",

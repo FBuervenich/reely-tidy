@@ -1144,3 +1144,43 @@ dialog input {
     width: 100%;
   }
 }
+
+.match-candidates {
+  display: grid;
+  gap: 0.5rem;
+  max-height: 18rem;
+  overflow: auto;
+  margin-block: 1rem;
+}
+.match-candidates button {
+  text-align: left;
+  white-space: normal;
+}
+.match-candidates small,
+.match-confidence {
+  display: block;
+  margin-top: 0.3rem;
+}
+.match-dialog form {
+  margin-block: 1rem;
+}
+.sidecar-choice {
+  display: block;
+  margin-top: 0.5rem;
+}
+
+.match-dialog > div {
+  padding: 1.5rem;
+}
+.match-dialog form {
+  padding: 0;
+  display: grid;
+  gap: 0.75rem;
+}
+.match-dialog form > button {
+  justify-self: start;
+}
+.match-dialog .dialog-actions {
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}

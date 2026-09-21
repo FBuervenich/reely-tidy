@@ -32,6 +32,10 @@ const {
   readyCount,
   chooseAndScan,
   selectMatch,
+  searchMatches,
+  useFilename,
+  setEpisodes,
+  assignSidecar,
   updateTarget,
   setEnabled,
   resetPlanForSettingsChange,
@@ -116,8 +120,13 @@ function saveSettings(settings: {
         :rows="rows"
         :filter="filter"
         :has-token="Boolean(token)"
+        :busy="scanning || moving"
         @update:filter="filter = $event"
         @select-match="selectMatch"
+        @search-matches="searchMatches"
+        @use-filename="useFilename"
+        @set-episodes="setEpisodes"
+        @assign-sidecar="assignSidecar"
         @update-target="updateTarget"
         @set-enabled="setEnabled"
       />

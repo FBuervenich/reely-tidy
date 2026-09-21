@@ -8,6 +8,10 @@ const emit = defineEmits<{
   'update:filter': [filter: PlanFilter]
   selectMatch: [row: PlanRow, match: TmdbResult]
   updateTarget: [row: PlanRow, target: string]
+  searchMatches: [row: PlanRow, query: string]
+  useFilename: [row: PlanRow]
+  setEpisodes: [row: PlanRow, season: number, episodes: number[]]
+  assignSidecar: [path: string, rowId: string]
   setEnabled: [row: PlanRow, enabled: boolean]
 }>()
 const filters: { value: PlanFilter; label: string }[] = [
@@ -25,7 +29,42 @@ const statusLabels = {
   error: 'Error',
   done: 'Moved',
 }
-const props = defineProps<{ rows: PlanRow[]; filter: PlanFilter; hasToken: boolean }>()
+const props = defineProps<{
+  rows: PlanRow[]
+  filter: PlanFilter
+  hasToken: boolean
+  busy?: boolean
+}>()
+const matchEditor = ref<PlanRow>()
+const matchDialog = ref<HTMLDialogElement>()
+const matchQuery = ref('')
+const seasonInput = ref(1)
+const episodeInput = ref('1')
+async function editMatch(row: PlanRow): Promise<void> {
+  matchEditor.value = row
+  matchQuery.value = row.detection.title
+  seasonInput.value = row.season ?? 1
+  episodeInput.value = (row.episodes ?? [row.episode ?? 1]).join(', ')
+  await nextTick()
+  matchDialog.value?.showModal()
+}
+function confirmMatch(candidate: TmdbResult): void {
+  if (matchEditor.value) emit('selectMatch', matchEditor.value, candidate)
+  matchDialog.value?.close()
+}
+function chooseFilename(): void {
+  if (matchEditor.value) emit('useFilename', matchEditor.value)
+  matchDialog.value?.close()
+}
+function saveEpisodes(): void {
+  if (!matchEditor.value) return
+  emit(
+    'setEpisodes',
+    matchEditor.value,
+    Number(seasonInput.value),
+    episodeInput.value.split(/[, ]+/).filter(Boolean).map(Number),
+  )
+}
 const editingDestination = ref<{ id: string; target: string }>()
 const destinationDialog = ref<HTMLDialogElement>()
 const copiedDestination = ref('')
@@ -99,7 +138,7 @@ async function copyDestination(target: string): Promise<void> {
 </script>
 
 <template>
-  <section class="plans">
+  <section class="plans" :inert="busy">
     <div class="section-head">
       <div><h2>Rename plan</h2></div>
       <div class="plan-controls">
@@ -165,12 +204,41 @@ async function copyDestination(target: string): Promise<void> {
               ><small v-if="row.sidecars.length"
                 >+ {{ row.sidecars.map((s) => s.name).join(', ') }}</small
               >
+              <label
+                v-for="choice in row.sidecarChoices"
+                :key="choice.file.path"
+                class="sidecar-choice"
+              >
+                Assign {{ choice.file.name }}
+                <select
+                  :disabled="row.searching"
+                  @change="
+                    emit(
+                      'assignSidecar',
+                      choice.file.path,
+                      ($event.target as HTMLSelectElement).value,
+                    )
+                  "
+                >
+                  <option disabled selected value="pending">Choose video …</option>
+                  <option value="">Leave sidecar in place</option>
+                  <option v-for="id in choice.rowIds" :key="id" :value="id">
+                    {{ rows.find((item) => item.id === id)?.source.name }}
+                  </option>
+                </select>
+              </label>
             </td>
             <td>
               <b>{{ row.kind === 'movie' ? 'Movie' : row.kind === 'series' ? 'Show' : '—' }}</b
               ><small
                 >{{ row.title || 'Unrecognized'
-                }}{{ row.season ? ` · S${pad(row.season)}E${pad(row.episode!)}` : '' }}</small
+                }}{{
+                  row.season !== undefined
+                    ? ` · S${pad(row.season)}${(row.episodes ?? []).map((episode) => `E${pad(episode)}`).join('')}`
+                    : row.airDate
+                      ? ` · ${row.airDate}`
+                      : ''
+                }}</small
               >
             </td>
             <td class="tmdb">
@@ -205,7 +273,7 @@ async function copyDestination(target: string): Promise<void> {
                   </aside>
                 </div></template
               ><template v-else-if="row.candidates.length"
-                ><select @change="chooseCandidate(row, $event)">
+                ><select :disabled="row.searching" @change="chooseCandidate(row, $event)">
                   <option value="">Select a match …</option>
                   <option v-for="(candidate, i) in row.candidates" :key="candidate.id" :value="i">
                     {{ candidate.title }} ({{ candidate.year || '—' }})
@@ -214,6 +282,33 @@ async function copyDestination(target: string): Promise<void> {
               ><small v-else>{{
                 row.searching ? 'Searching …' : hasToken ? 'No match' : 'No token'
               }}</small>
+              <small class="match-confidence">{{
+                row.confidence === 'confirmed'
+                  ? 'User confirmed'
+                  : row.confidence === 'metadata'
+                    ? 'Metadata match'
+                    : 'Unverified filename suggestion'
+              }}</small>
+              <small v-if="row.kind === 'series'">{{
+                row.episodeValidation === 'valid'
+                  ? 'Episodes verified'
+                  : row.episodeValidation === 'missing'
+                    ? 'Episode missing — review required'
+                    : 'Episodes not yet validated'
+              }}</small>
+              <small v-if="row.matchReasons.length">{{ row.matchReasons.join('; ') }}</small>
+              <details v-if="row.evidence.length">
+                <summary>Detection context</summary>
+                <small>{{ row.evidence.join('; ') }}</small>
+              </details>
+              <button
+                v-if="row.state !== 'done'"
+                type="button"
+                :disabled="row.searching"
+                @click="editMatch(row)"
+              >
+                {{ row.match ? 'Change match' : 'Search / choose match' }}
+              </button>
             </td>
             <td class="destination-cell">
               <div v-if="row.target" class="destination">
@@ -240,6 +335,68 @@ async function copyDestination(target: string): Promise<void> {
         </tbody>
       </table>
     </div>
+    <dialog
+      ref="matchDialog"
+      class="destination-dialog match-dialog"
+      @close="matchEditor = undefined"
+    >
+      <div v-if="matchEditor">
+        <h2>Change match</h2>
+        <p v-if="matchEditor.kind === 'series'">
+          A confirmed series match applies to this series folder. Episode numbers are validated
+          separately.
+        </p>
+        <form @submit.prevent="emit('searchMatches', matchEditor, matchQuery)">
+          <label
+            >Title, tmdb:123 or tt1234567<input
+              v-model="matchQuery"
+              autofocus
+              aria-label="Title or provider ID"
+          /></label>
+          <button type="submit" :disabled="matchEditor.searching || !hasToken">
+            {{ matchEditor.searching ? 'Searching …' : 'Search' }}
+          </button>
+        </form>
+        <p v-if="!hasToken">
+          Add a TMDB token in Settings to search. You can still correct episode numbers or use the
+          filename suggestion.
+        </p>
+        <p v-if="matchEditor.lookupError" role="status">{{ matchEditor.lookupError }}</p>
+        <div class="match-candidates">
+          <button
+            v-for="candidate in matchEditor.candidates"
+            :key="candidate.id"
+            type="button"
+            :disabled="matchEditor.searching"
+            @click="confirmMatch(candidate)"
+          >
+            <b>{{ candidate.title }} ({{ candidate.year || '—' }}) · TMDB {{ candidate.id }}</b>
+            <small>Score {{ candidate.score }} · {{ candidate.reasons?.join('; ') }}</small>
+            <small v-if="candidate.contradictions?.length">{{
+              candidate.contradictions.join('; ')
+            }}</small>
+          </button>
+        </div>
+        <form v-if="matchEditor.kind === 'series'" @submit.prevent="saveEpisodes">
+          <label
+            >Season<input v-model.number="seasonInput" type="number" min="0" max="99" required
+          /></label>
+          <label
+            >Episodes (comma-separated)<input v-model="episodeInput" pattern="[0-9, ]+" required
+          /></label>
+          <button type="submit" :disabled="matchEditor.searching">
+            Set episode numbers / validate
+          </button>
+        </form>
+        <p v-if="matchEditor.error" role="status">{{ matchEditor.error }}</p>
+        <div class="dialog-actions">
+          <button type="button" :disabled="matchEditor.searching" @click="chooseFilename">
+            Use filename / forget saved match
+          </button>
+          <button type="button" @click="matchDialog?.close()">Close</button>
+        </div>
+      </div>
+    </dialog>
     <dialog ref="destinationDialog" class="destination-dialog" @close="clearDestinationEditor">
       <form v-if="editingDestination" @submit.prevent="saveDestination">
         <p class="eyebrow">DESTINATION</p>

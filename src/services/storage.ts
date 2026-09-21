@@ -88,3 +88,9 @@ export function writeMapping(key: string, match: TmdbResult): void {
   mappings[key] = match
   localStorage.setItem(MAP_KEY, JSON.stringify(mappings))
 }
+
+export function forgetMapping(key: string): void {
+  const mappings = readMappings()
+  delete mappings[key]
+  localStorage.setItem(MAP_KEY, JSON.stringify(mappings))
+}

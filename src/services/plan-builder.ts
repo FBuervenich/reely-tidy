@@ -13,31 +13,102 @@ export interface BaseFolders {
   preset?: NamingPreset
 }
 
-export function createPlan(files: FoundFile[], baseFolders: BaseFolders): PlanRow[] {
-  return files
-    .filter((file) => VIDEO_EXTENSIONS.has(extensionOf(file.name)))
-    .map((source, index) => {
-      const parsed = parseMediaName(source.name)
-      const sidecars = files.filter((other) => isMatchingSidecar(source, other))
-      const row: PlanRow = {
-        id: `${index}-${source.path}`,
-        source,
-        sidecars,
-        ...parsed,
-        identityKey: `${parsed.kind}:${parsed.title.toLowerCase()}:${parsed.year ?? ''}`,
-        candidates: [],
-        target: '',
-        enabled: parsed.kind !== 'unknown',
-        searching: false,
-        state: parsed.kind === 'unknown' ? 'unrecognized' : 'ready',
+export function createPlan(files: FoundFile[], baseFolders: BaseFolders, rootName = ''): PlanRow[] {
+  const videos = files.filter((file) => VIDEO_EXTENSIONS.has(extensionOf(file.name)))
+  const rows = videos.map((source, index) => {
+    const parsed = parseMediaName(source.name, source.path, rootName)
+    const groupKey =
+      parsed.kind === 'series'
+        ? `series:${rootName}/${parsed.seriesFolder ?? ''}:${parsed.title.toLowerCase()}:${parsed.year ?? ''}`
+        : `movie:${rootName}/${source.path}`
+    const row: PlanRow = {
+      id: `${index}-${source.path}`,
+      source,
+      sidecars: [],
+      ...parsed,
+      detection: structuredClone(parsed),
+      groupKey,
+      identityKey: `confirmed-v2:${groupKey}`,
+      confidence: 'filename',
+      matchReasons: [],
+      episodeValidation: 'unvalidated',
+      sidecarChoices: [],
+      candidates: [],
+      target: '',
+      enabled: parsed.kind !== 'unknown' && Boolean(parsed.title || parsed.ids.length),
+      searching: false,
+      state:
+        parsed.kind === 'unknown' || (!parsed.title && !parsed.ids.length)
+          ? 'unrecognized'
+          : parsed.inferredEpisode || parsed.airDate
+            ? 'needs-choice'
+            : 'ready',
+    }
+    rebuildTarget(row, undefined, baseFolders)
+    return row
+  })
+  for (const file of files.filter((item) => SIDECAR_EXTENSIONS.has(extensionOf(item.name)))) {
+    const matches = rows
+      .filter((row) => isMatchingSidecar(row.source, file))
+      .sort((a, b) => stemOf(b.source.name).length - stemOf(a.source.name).length)
+    if (!matches.length) continue
+    const longest = matches.filter(
+      (row) => stemOf(row.source.name).length === stemOf(matches[0].source.name).length,
+    )
+    if (longest.length === 1) longest[0].sidecars.push(file)
+    else
+      for (const row of longest) {
+        row.sidecarChoices.push({ file, rowIds: longest.map((item) => item.id) })
+        row.state = 'needs-choice'
       }
-      rebuildTarget(row, undefined, baseFolders)
-      return row
-    })
+  }
+  for (const row of rows) {
+    if (row.kind === 'series' && row.inferredEpisode) {
+      const explicitPeers = rows.filter(
+        (other) =>
+          other.id !== row.id &&
+          other.kind === 'series' &&
+          other.seriesFolder === row.seriesFolder &&
+          other.season === row.season &&
+          other.interpretations[0]?.source === 'filename',
+      )
+      const titles = new Map(explicitPeers.map((peer) => [peer.title.toLowerCase(), peer]))
+      if (titles.size === 1) {
+        const peer = [...titles.values()][0]
+        row.interpretations.push({ title: peer.title, year: peer.year, source: 'neighbors' })
+        row.detection.interpretations = row.interpretations
+        row.evidence.push(
+          'Consistent series title in neighboring filenames; episode numbering still needs validation',
+        )
+        if (!row.title) {
+          row.title = row.detection.title = peer.title
+          row.year = row.detection.year = peer.year
+          row.groupKey = peer.groupKey
+          row.identityKey = peer.identityKey
+          row.enabled = true
+          row.state = 'needs-choice'
+          rebuildTarget(row, undefined, baseFolders)
+        }
+      }
+    }
+    const neighbors = rows.filter(
+      (other) =>
+        other.id !== row.id && other.groupKey === row.groupKey && other.season === row.season,
+    )
+    if (row.kind === 'series' && neighbors.length)
+      row.evidence.push(
+        `${neighbors.length} neighboring file(s) in the same season; numbering not yet verified`,
+      )
+  }
+  return rows
 }
 
 function isMatchingSidecar(source: FoundFile, candidate: FoundFile): boolean {
-  if (candidate.parent !== source.parent || !SIDECAR_EXTENSIONS.has(extensionOf(candidate.name)))
+  if (
+    candidate.path.slice(0, candidate.path.lastIndexOf('/') + 1) !==
+      source.path.slice(0, source.path.lastIndexOf('/') + 1) ||
+    !SIDECAR_EXTENSIONS.has(extensionOf(candidate.name))
+  )
     return false
   const sourceName = source.name.toLocaleLowerCase()
   const sourceStem = stemOf(source.name).toLocaleLowerCase()
@@ -54,11 +125,15 @@ export function rebuildTarget(
   episodeTitle: string | undefined,
   baseFolders: BaseFolders,
 ): void {
+  if (!row.title && !row.targetTitle) {
+    row.target = ''
+    return
+  }
   const preset = baseFolders.preset ?? defaultNamingPreset()
   if (row.kind === 'movie')
-    row.target = buildTarget(row, baseFolders.root, preset.movie, episodeTitle)
-  else if (row.kind === 'series' && row.season && row.episode)
-    row.target = buildTarget(row, baseFolders.root, preset.series, episodeTitle)
+    row.target = buildTarget(row, baseFolders.root, preset.movie, episodeTitle ?? row.episodeTitle)
+  else if (row.kind === 'series' && row.season !== undefined && row.episode !== undefined)
+    row.target = buildTarget(row, baseFolders.root, preset.series, episodeTitle ?? row.episodeTitle)
   else row.target = ''
 }
 
@@ -81,11 +156,23 @@ export function detectDuplicateTargets(rows: PlanRow[]): void {
     }
   const seen = new Map<string, PlanRow>()
   for (const row of rows) {
-    if (['unrecognized', 'needs-choice', 'error'].includes(row.state) || !row.target) continue
-    const prior = seen.get(row.target.toLowerCase())
-    if (prior) {
-      row.state = prior.state = 'conflict'
-      row.error = prior.error = 'Two entries have the same destination.'
-    } else seen.set(row.target.toLowerCase(), row)
+    if (
+      !row.enabled ||
+      ['unrecognized', 'needs-choice', 'error', 'done'].includes(row.state) ||
+      !row.target
+    )
+      continue
+    const folder = row.target.slice(0, row.target.lastIndexOf('/') + 1)
+    const targets = [
+      row.target,
+      ...row.sidecars.map((file) => folder + companionTargetName(row, file.name)),
+    ]
+    for (const target of targets) {
+      const prior = seen.get(target.toLowerCase())
+      if (prior) {
+        row.state = prior.state = 'conflict'
+        row.error = prior.error = 'Two files have the same destination (including sidecars).'
+      } else seen.set(target.toLowerCase(), row)
+    }
   }
 }

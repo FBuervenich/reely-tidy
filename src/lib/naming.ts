@@ -1,4 +1,5 @@
 import { pad, safeName, stemOf } from './media'
+import { parseScene } from './scene'
 import type { PlanRow } from '../types/plan'
 
 export type TemplateToken =
@@ -126,65 +127,11 @@ export function cloneNamingPreset(preset: NamingPreset): NamingPreset {
   return JSON.parse(JSON.stringify(preset)) as NamingPreset
 }
 
-const TECHNICAL_MARKER =
-  /(?:^|[ ._-])(?:2160p|1080p|720p|576p|480p|web[ ._-]?dl|webrip|blu[ ._-]?ray|brrip|dvdrip|remux|x26[45]|h[ ._-]?26[45]|hevc|av1|aac|ac-?3|e-?ac-?3|dts(?:-?hd)?|truehd|atmos|hdr(?:10(?:\+)?|10\+)?|dolby[ ._-]?vision|dv)(?=$|[ ._-])/i
-
-const LANGUAGE_TAGS = new Set([
-  'de',
-  'en',
-  'ger',
-  'eng',
-  'german',
-  'deutsch',
-  'english',
-  'french',
-  'fr',
-  'spanish',
-  'es',
-  'italian',
-  'it',
-  'japanese',
-  'jp',
-  'jpn',
-  'korean',
-  'kr',
-  'kor',
-  'multi',
-  'dl',
-  'dubbed',
-])
-
-/**
- * Extract the release suffix only once a known technical marker is encountered.
- * A contiguous language prefix (for example `GERMAN.DL`) is retained when it
- * contains at least two recognised language/release tokens.
- */
 export function sceneTagsForFile(fileName: string): string {
-  const stem = stemOf(fileName)
-  const marker = TECHNICAL_MARKER.exec(stem)
-  if (!marker || marker.index === undefined) return ''
-
-  const markerStart = marker.index + marker[0].lastIndexOf(marker[0].trimStart())
-  const prefix = stem.slice(0, markerStart)
-  const words = [...prefix.matchAll(/[A-Za-z0-9]+/g)]
-  let languageStart = markerStart
-  let languageCount = 0
-
-  for (let index = words.length - 1; index >= 0; index -= 1) {
-    const word = words[index]
-    if (!LANGUAGE_TAGS.has(word[0].toLowerCase())) break
-    languageStart = word.index!
-    languageCount += 1
-  }
-
-  const start = languageCount >= 2 ? languageStart : markerStart
-  return safeName(stem.slice(start).replace(/[._]+/g, ' ').replace(/\s+/g, ' ').trim())
+  return parseScene(stemOf(fileName)).tags
 }
-
 export function releaseGroupForFile(fileName: string): string {
-  if (!sceneTagsForFile(fileName)) return ''
-  const group = stemOf(fileName).match(/-([A-Za-z0-9][A-Za-z0-9._-]*)$/)
-  return group ? safeName(group[1]) : ''
+  return parseScene(stemOf(fileName)).releaseGroup
 }
 
 function tokenValue(token: TemplateToken | undefined, row: PlanRow, episodeTitle?: string): string {
@@ -195,9 +142,9 @@ function tokenValue(token: TemplateToken | undefined, row: PlanRow, episodeTitle
     case 'year':
       return row.year ? String(row.year) : ''
     case 'season':
-      return row.season ? pad(row.season) : ''
+      return row.season !== undefined ? pad(row.season) : ''
     case 'episode':
-      return row.episode ? pad(row.episode) : ''
+      return (row.episodes ?? (row.episode !== undefined ? [row.episode] : [])).map(pad).join('E')
     case 'episodeTitle':
       return safeName(episodeTitle || (row.episode ? `Episode ${pad(row.episode)}` : ''))
     case 'sceneTags':

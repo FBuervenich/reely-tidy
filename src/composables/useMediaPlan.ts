@@ -1,5 +1,14 @@
 import { computed, ref, type Ref } from 'vue'
-import { getEnglishTitle, getEpisode, type TmdbResult, searchTmdb } from '../lib/tmdb'
+import { clearTmdbCache, getDetails, resolveId, type TmdbResult, searchTmdb } from '../lib/tmdb'
+import {
+  automaticMatch,
+  findCandidates,
+  evaluateCandidates,
+  scoreCandidate,
+  validateEpisodes,
+} from '../services/matching'
+import { addNfoContext } from '../services/context'
+import { providerIds } from '../lib/media'
 import {
   companionTargetName,
   createPlan,
@@ -16,7 +25,7 @@ import {
   pickSourceFolder,
   supportsNativeMove,
 } from '../services/file-system'
-import { readMappings, writeMapping } from '../services/storage'
+import { forgetMapping, readMappings, writeMapping } from '../services/storage'
 import type { MoveLog, PlanFilter, PlanRow } from '../types/plan'
 
 const errorMessage = (error: unknown) => (error instanceof Error ? error.message : String(error))
@@ -42,7 +51,10 @@ export function useMediaPlan(
   const supportsMove = supportsNativeMove()
 
   const readyCount = computed(
-    () => rows.value.filter((row) => row.enabled && row.state === 'ready').length,
+    () =>
+      rows.value.filter(
+        (row) => row.enabled && row.state === 'ready' && !row.searching && Boolean(row.target),
+      ).length,
   )
 
   async function chooseFolder(): Promise<boolean> {
@@ -86,15 +98,26 @@ export function useMediaPlan(
     scanState.value = ''
     try {
       const baseFolders = currentBaseFolders()
-      rows.value = createPlan(
-        await listFiles(root.value, { ignoredRootDirectories: [baseFolders.root] }),
-        baseFolders,
-      )
+      clearTmdbCache()
+      const files = await listFiles(root.value, { ignoredRootDirectories: [baseFolders.root] })
+      rows.value = createPlan(files, baseFolders, root.value.name)
+      await addNfoContext(rows.value, files)
       readingFiles.value = false
       const rowsToEnrich = rows.value.filter((row) => row.kind !== 'unknown')
       if (token.value && rowsToEnrich.length) {
         loadingTmdb.value = true
-        await Promise.all(rowsToEnrich.map(enrich))
+        const groups = new Map<string, PlanRow[]>()
+        for (const row of rowsToEnrich) {
+          // Different explicit IDs must never silently share a match.
+          const key = `${row.groupKey}:${JSON.stringify(row.ids)}`
+          groups.set(key, [...(groups.get(key) ?? []), row])
+        }
+        const work = [...groups.values()]
+        await Promise.all(
+          Array.from({ length: Math.min(4, work.length) }, async () => {
+            while (work.length) await enrichGroup(work.shift()!)
+          }),
+        )
       }
       detectDuplicateTargets(rows.value)
       scanState.value = ''
@@ -107,74 +130,242 @@ export function useMediaPlan(
     }
   }
 
-  async function enrich(row: PlanRow): Promise<void> {
-    if (!token.value || row.kind === 'unknown') return
-    row.searching = true
-    row.error = undefined
+  function refreshState(row: PlanRow): void {
+    if (
+      row.matchPending ||
+      row.sidecarChoices.length ||
+      row.episodeValidation === 'missing' ||
+      (row.kind === 'series' &&
+        row.episodeValidation !== 'valid' &&
+        (row.inferredEpisode || row.airDate))
+    )
+      row.state = 'needs-choice'
+    else row.state = row.target ? 'ready' : 'unrecognized'
+  }
+
+  async function enrichGroup(group: PlanRow[]): Promise<void> {
+    group.forEach((row) => {
+      row.searching = true
+      row.error = undefined
+    })
     try {
-      const cached = readMappings()[row.identityKey]
+      const first = group[0]
+      const cached = readMappings()[first.identityKey]
       if (cached) {
-        await selectMatch(row, cached, false)
+        const current = await getDetails(
+          first.kind === 'series' ? 'tv' : 'movie',
+          cached.id,
+          token.value,
+        )
+        await Promise.all(group.map((row) => applyMatch(row, current, 'confirmed')))
         return
       }
-      row.candidates = await searchTmdb(
-        row.kind === 'movie' ? 'movie' : 'tv',
-        row.title,
-        row.year,
-        token.value,
-      )
-      if (row.candidates.length === 1) await selectMatch(row, row.candidates[0])
-      else if (row.candidates.length > 1) {
-        row.state = 'needs-choice'
-        row.target = ''
-        row.error = 'Select the correct TMDB match.'
-      } else row.error = 'No TMDB match — using the filename suggestion.'
+      const candidates = await findCandidates(first.detection, token.value)
+      for (const row of group) {
+        row.candidates = await evaluateCandidates(row.detection, candidates, token.value)
+        for (const candidate of row.candidates) {
+          const providerWarnings =
+            candidates
+              .find((item) => item.id === candidate.id)
+              ?.contradictions?.filter((reason) => reason.startsWith('Provider ID')) ?? []
+          candidate.contradictions!.push(...providerWarnings)
+        }
+        const match = automaticMatch(row.candidates)
+        if (match) await applyMatch(row, match, 'metadata')
+        else if (candidates.length) {
+          row.matchPending = true
+          row.state = 'needs-choice'
+          row.error = `Select a match or use the filename suggestion. ${row.candidates[0]?.contradictions?.join('; ') || 'Evidence is ambiguous or insufficient.'}`
+        } else row.error = 'No TMDB match — unverified filename suggestion.'
+      }
     } catch (error) {
-      row.state = 'error'
-      row.error = errorMessage(error)
+      group.forEach((row) => {
+        row.error = `Metadata not validated: ${errorMessage(error)}`
+      })
+    } finally {
+      group.forEach((row) => {
+        row.searching = false
+      })
+    }
+  }
+
+  async function applyMatch(
+    row: PlanRow,
+    match: TmdbResult,
+    confidence: PlanRow['confidence'],
+  ): Promise<void> {
+    if (row.kind === 'unknown') {
+      row.kind = row.detection.kind = 'movie'
+      row.enabled = true
+    }
+    row.match = match
+    row.matchPending = false
+    row.confidence = confidence
+    row.matchReasons =
+      confidence === 'confirmed'
+        ? ['User-confirmed assignment for this folder']
+        : [...(match.reasons ?? [])]
+    row.title = match.title || row.detection.title
+    row.targetTitle = undefined
+    row.year = match.year ?? row.detection.year
+    row.episodeTitle = undefined
+    row.episodeValidation = 'unvalidated'
+    row.season = row.detection.season
+    row.episode = row.detection.episode
+    row.episodes = row.detection.episodes
+    row.error = undefined
+    try {
+      const detail = await getDetails(row.kind === 'series' ? 'tv' : 'movie', match.id, token.value)
+      row.targetTitle = detail.title
+      if (row.kind === 'series') {
+        const validation = await validateEpisodes(row.detection, detail, token.value)
+        row.episodeValidation = validation.status
+        if (!row.matchReasons.includes(validation.reason)) row.matchReasons.push(validation.reason)
+        if (validation.status === 'valid') {
+          row.season = validation.season
+          row.episodes = validation.episodes
+          row.episode = validation.episodes?.[0]
+          row.episodeTitle = validation.title
+        } else row.error = validation.reason
+      }
+    } catch (error) {
+      row.error = `Metadata not yet validated: ${errorMessage(error)}`
+    }
+    rebuildTarget(row, row.episodeTitle, currentBaseFolders())
+    refreshState(row)
+  }
+
+  async function selectMatch(row: PlanRow, match: TmdbResult): Promise<void> {
+    const group =
+      row.kind === 'series'
+        ? rows.value.filter(
+            (other) =>
+              other.groupKey === row.groupKey &&
+              other.state !== 'done' &&
+              (!other.ids.length || JSON.stringify(other.ids) === JSON.stringify(row.ids)),
+          )
+        : [row]
+    group.forEach((item) => {
+      item.searching = true
+    })
+    try {
+      await Promise.all(group.map((item) => applyMatch(item, match, 'confirmed')))
+      try {
+        for (const item of group) writeMapping(item.identityKey, match)
+      } catch (error) {
+        row.error = `Match applied, but could not be saved: ${errorMessage(error)}`
+      }
+    } finally {
+      group.forEach((item) => {
+        item.searching = false
+      })
+      detectDuplicateTargets(rows.value)
+    }
+  }
+
+  async function searchMatches(row: PlanRow, query: string): Promise<void> {
+    if (!token.value || !query.trim()) return
+    row.searching = true
+    row.lookupError = undefined
+    try {
+      const type = row.kind === 'series' ? 'tv' : 'movie'
+      const ids = providerIds(query)
+      row.candidates = (
+        ids.length
+          ? await resolveId(type, ids[0], token.value)
+          : await searchTmdb(type, query, undefined, token.value)
+      )
+        .map((candidate) => scoreCandidate(row.detection, candidate))
+        .sort((a, b) => b.score! - a.score!)
+      if (!row.candidates.length) row.lookupError = 'No matches found.'
+    } catch (error) {
+      row.lookupError = errorMessage(error)
     } finally {
       row.searching = false
     }
   }
 
-  async function selectMatch(row: PlanRow, match: TmdbResult, remember = true): Promise<void> {
-    row.match = match
-    row.title = match.title || row.title
-    row.year = match.year ?? row.year
-    row.state = 'ready'
-    row.error = undefined
-    // Make the destination visible immediately; richer English / episode metadata can refine it afterwards.
+  function useFilename(row: PlanRow): void {
+    forgetMapping(row.identityKey)
+    Object.assign(
+      row,
+      {
+        year: undefined,
+        season: undefined,
+        episode: undefined,
+        episodes: undefined,
+        airDate: undefined,
+        inferredEpisode: undefined,
+      },
+      JSON.parse(JSON.stringify(row.detection)),
+    )
+    row.match = undefined
+    row.matchPending = false
+    row.targetTitle = undefined
+    row.confidence = 'filename'
+    row.matchReasons = []
+    row.episodeTitle = undefined
+    row.episodeValidation = 'unvalidated'
+    row.error = 'Unverified filename suggestion selected by user.'
     rebuildTarget(row, undefined, currentBaseFolders())
-    if (token.value) {
-      try {
-        row.targetTitle = await getEnglishTitle(
-          row.kind === 'movie' ? 'movie' : 'tv',
-          match.id,
-          token.value,
-        )
-      } catch (error) {
-        row.error = `English title could not be loaded: ${errorMessage(error)}`
-      }
+    refreshState(row)
+    detectDuplicateTargets(rows.value)
+  }
+
+  function setEpisodes(row: PlanRow, season: number, episodes: number[]): void {
+    if (
+      !Number.isInteger(season) ||
+      season < 0 ||
+      season > 99 ||
+      !episodes.length ||
+      episodes.some((episode) => !Number.isInteger(episode) || episode < 1 || episode > 999)
+    )
+      return
+    Object.assign(row.detection, {
+      season,
+      episode: episodes[0],
+      episodes: [...new Set(episodes)],
+      airDate: undefined,
+      inferredEpisode: false,
+    })
+    Object.assign(row, {
+      season,
+      episode: episodes[0],
+      episodes: [...new Set(episodes)],
+      airDate: undefined,
+      inferredEpisode: false,
+    })
+    if (row.match) void selectMatchForRow(row)
+    else useFilename(row)
+  }
+  async function selectMatchForRow(row: PlanRow): Promise<void> {
+    row.searching = true
+    try {
+      await applyMatch(row, row.match!, row.confidence)
+    } finally {
+      row.searching = false
+      detectDuplicateTargets(rows.value)
     }
-    if (row.kind === 'series' && row.season && row.episode && token.value) {
-      try {
-        const episodeTitle = await getEpisode(match.id, row.season, row.episode, token.value)
-        if (!episodeTitle) row.error = 'Episode title is unavailable; the suggestion can be edited.'
-        rebuildTarget(row, episodeTitle, currentBaseFolders())
-      } catch (error) {
-        row.error = `Episode title could not be loaded: ${errorMessage(error)}`
-        rebuildTarget(row, undefined, currentBaseFolders())
-      }
-    } else rebuildTarget(row, undefined, currentBaseFolders())
-    if (remember) writeMapping(row.identityKey, match)
+  }
+
+  function assignSidecar(path: string, rowId: string): void {
+    const choice = rows.value
+      .flatMap((row) => row.sidecarChoices)
+      .find((item) => item.file.path === path)
+    if (!choice || (rowId && !choice.rowIds.includes(rowId))) return
+    for (const row of rows.value) {
+      const affected = row.sidecarChoices.some((item) => item.file.path === path)
+      row.sidecarChoices = row.sidecarChoices.filter((item) => item.file.path !== path)
+      if (row.id === rowId) row.sidecars.push(choice.file)
+      if (affected) refreshState(row)
+    }
     detectDuplicateTargets(rows.value)
   }
 
   function updateTarget(row: PlanRow, target: string): void {
     row.target = target
     if (target.trim()) {
-      row.state = 'ready'
-      row.error = undefined
+      refreshState(row)
       detectDuplicateTargets(rows.value)
     }
   }
@@ -188,6 +379,7 @@ export function useMediaPlan(
 
   function setEnabled(row: PlanRow, enabled: boolean): void {
     row.enabled = enabled
+    detectDuplicateTargets(rows.value)
   }
 
   function resetPlanForSettingsChange(): void {
@@ -217,7 +409,9 @@ export function useMediaPlan(
       return
     }
     if (!root.value) return
-    const candidates = rows.value.filter((row) => row.enabled && row.state === 'ready')
+    const candidates = rows.value.filter(
+      (row) => row.enabled && row.state === 'ready' && !row.searching && Boolean(row.target),
+    )
     if (!candidates.length) return
     moving.value = true
     logs.value = []
@@ -294,6 +488,10 @@ export function useMediaPlan(
     readyCount,
     chooseAndScan,
     selectMatch,
+    searchMatches,
+    useFilename,
+    setEpisodes,
+    assignSidecar,
     updateTarget,
     setEnabled,
     resetPlanForSettingsChange,
