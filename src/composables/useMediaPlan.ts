@@ -47,6 +47,8 @@ export function useMediaPlan(
   const scanning = ref(false)
   const readingFiles = ref(false)
   const loadingTmdb = ref(false)
+  const tmdbLoaded = ref(0)
+  const tmdbTotal = ref(0)
   const moving = ref(false)
   const supportsMove = supportsNativeMove()
 
@@ -96,6 +98,8 @@ export function useMediaPlan(
     rows.value = []
     logs.value = []
     scanState.value = ''
+    tmdbLoaded.value = 0
+    tmdbTotal.value = 0
     try {
       const baseFolders = currentBaseFolders()
       clearTmdbCache()
@@ -106,6 +110,7 @@ export function useMediaPlan(
       const rowsToEnrich = rows.value.filter((row) => row.kind !== 'unknown')
       if (token.value && rowsToEnrich.length) {
         loadingTmdb.value = true
+        tmdbTotal.value = rowsToEnrich.length
         const groups = new Map<string, PlanRow[]>()
         for (const row of rowsToEnrich) {
           // Different explicit IDs must never silently share a match.
@@ -115,7 +120,14 @@ export function useMediaPlan(
         const work = [...groups.values()]
         await Promise.all(
           Array.from({ length: Math.min(4, work.length) }, async () => {
-            while (work.length) await enrichGroup(work.shift()!)
+            while (work.length) {
+              const group = work.shift()!
+              try {
+                await enrichGroup(group)
+              } finally {
+                tmdbLoaded.value += group.length
+              }
+            }
           }),
         )
       }
@@ -583,6 +595,8 @@ export function useMediaPlan(
     scanning,
     readingFiles,
     loadingTmdb,
+    tmdbLoaded,
+    tmdbTotal,
     moving,
     supportsMove,
     readyCount,

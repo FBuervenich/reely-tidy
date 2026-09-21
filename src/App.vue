@@ -27,6 +27,8 @@ const {
   scanning,
   readingFiles,
   loadingTmdb,
+  tmdbLoaded,
+  tmdbTotal,
   moving,
   supportsMove,
   readyCount,
@@ -135,7 +137,7 @@ function saveSettings(settings: {
       <div v-if="loadingTmdb" class="plan-loading-overlay" role="status">
         <div>
           <span class="loading-spinner" aria-hidden="true"></span><b>Loading TMDB details</b
-          ><small>Matching titles and episodes …</small>
+          ><small>TMDB metadata: {{ tmdbLoaded }} of {{ tmdbTotal }} loaded</small>
         </div>
       </div>
     </div>

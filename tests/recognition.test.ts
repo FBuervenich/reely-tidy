@@ -509,6 +509,8 @@ describe('complete scans and corrections', () => {
     expect(
       plan.rows.value.every((row) => row.confidence === 'metadata' && row.state === 'ready'),
     ).toBe(true)
+    expect(plan.tmdbTotal.value).toBe(3)
+    expect(plan.tmdbLoaded.value).toBe(3)
     expect(fetch).toHaveBeenCalledTimes(3)
     expect(localStorage.getItem('mediaRenamer.tmdbMappings')).toBeNull()
   })
