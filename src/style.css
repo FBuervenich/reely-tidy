@@ -1164,6 +1164,22 @@ dialog input {
 .match-dialog form {
   margin-block: 1rem;
 }
+.media-kind {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  margin: 1rem 0;
+  padding: 0;
+  border: 0;
+}
+.media-kind legend {
+  width: 100%;
+  margin-bottom: 0.4rem;
+}
+.media-kind .selected {
+  background: var(--accent);
+  color: var(--accent-contrast, white);
+}
 .sidecar-choice {
   display: block;
   margin-top: 0.5rem;

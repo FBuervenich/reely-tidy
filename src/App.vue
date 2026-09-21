@@ -35,6 +35,7 @@ const {
   searchMatches,
   useFilename,
   setEpisodes,
+  setMediaKind,
   assignSidecar,
   updateTarget,
   setEnabled,
@@ -126,6 +127,7 @@ function saveSettings(settings: {
         @search-matches="searchMatches"
         @use-filename="useFilename"
         @set-episodes="setEpisodes"
+        @set-media-kind="setMediaKind"
         @assign-sidecar="assignSidecar"
         @update-target="updateTarget"
         @set-enabled="setEnabled"

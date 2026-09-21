@@ -1,4 +1,4 @@
-import type { ParsedMedia } from '../lib/media'
+import type { MediaKind, ParsedMedia } from '../lib/media'
 import type { TmdbResult } from '../lib/tmdb'
 
 export type RowState = 'ready' | 'conflict' | 'unrecognized' | 'needs-choice' | 'error' | 'done'
@@ -21,7 +21,11 @@ export interface PlanRow extends ParsedMedia {
   season?: number
   episode?: number
   identityKey: string
+  /** Key used by releases before per-file mappings were introduced. */
+  legacyIdentityKey?: string
   groupKey: string
+  /** A user-selected type. `detection` always keeps the parser's original result. */
+  kindOverride?: Exclude<MediaKind, 'unknown'>
   detection: ParsedMedia
   confidence: 'filename' | 'metadata' | 'confirmed'
   matchPending?: boolean

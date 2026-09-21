@@ -9,6 +9,13 @@ const SHOWS_FOLDER_KEY = 'mediaRenamer.showsBaseFolder'
 const NAMING_PRESETS_KEY = 'mediaRenamer.namingPresets'
 const ACTIVE_PRESET_KEY = 'mediaRenamer.activeNamingPreset'
 
+export interface SavedTmdbMapping extends TmdbResult {
+  /** Optional so mappings saved by earlier versions remain readable. */
+  kind?: 'movie' | 'series'
+  season?: number
+  episodes?: number[]
+}
+
 export interface AppSettings {
   token: string
   rootFolder: string
@@ -76,16 +83,25 @@ function readNamingPresets(movieBaseFolder: string, showsBaseFolder: string): Na
   return [defaultNamingPreset(movieBaseFolder, showsBaseFolder)]
 }
 
-export function readMappings(): Record<string, TmdbResult> {
+export function readMappings(): Record<string, SavedTmdbMapping> {
   try {
     return JSON.parse(localStorage.getItem(MAP_KEY) ?? '{}')
   } catch {
     return {}
   }
 }
-export function writeMapping(key: string, match: TmdbResult): void {
+export function writeMapping(
+  key: string,
+  match: TmdbResult,
+  kind: 'movie' | 'series',
+  episodeData?: { season?: number; episodes?: number[] },
+): void {
   const mappings = readMappings()
-  mappings[key] = match
+  mappings[key] = {
+    ...match,
+    kind,
+    ...(kind === 'series' ? { season: episodeData?.season, episodes: episodeData?.episodes } : {}),
+  }
   localStorage.setItem(MAP_KEY, JSON.stringify(mappings))
 }
 

@@ -69,6 +69,52 @@ describe('review and correction workflows', () => {
     expect(row.searching).toBe(false)
   })
 
+  it('searches the other TMDB catalogue after changing the detected media type', async () => {
+    const fetch = vi.fn(async (url: string) =>
+      response(
+        url.includes('/search/tv')
+          ? { results: [{ id: 1, name: 'Dune: Prophecy', first_air_date: '2024-01-01' }] }
+          : { id: 1, name: 'Dune: Prophecy' },
+      ),
+    )
+    vi.stubGlobal('fetch', fetch)
+    const plan = setupPlan(['Dune.mkv'])
+    const row = plan.rows.value[0]
+
+    plan.setMediaKind(row, 'series')
+    expect(row).toMatchObject({ kind: 'series', kindOverride: 'series', state: 'needs-choice' })
+    plan.setEpisodes(row, 1, [1])
+    expect(row.detection.kind).toBe('movie')
+    expect(row.kind).toBe('series')
+
+    await plan.searchMatches(row, 'Dune: Prophecy')
+    expect(fetch.mock.calls.some(([url]) => url.includes('/search/tv'))).toBe(true)
+
+    await plan.selectMatch(row, { id: 1, title: 'Dune: Prophecy', year: 2024 })
+    expect(readMappings()[row.identityKey]).toMatchObject({
+      id: 1,
+      kind: 'series',
+      season: 1,
+      episodes: [1],
+    })
+  })
+
+  it('clears episode data and uses the movie preset after changing a show into a movie', () => {
+    const plan = setupPlan(['Dark.S01E02.mkv'])
+    const row = plan.rows.value[0]
+
+    plan.setMediaKind(row, 'movie')
+
+    expect(row).toMatchObject({
+      kind: 'movie',
+      kindOverride: 'movie',
+      season: undefined,
+      episode: undefined,
+      episodes: undefined,
+    })
+    expect(row.target).toContain('/Movies/')
+  })
+
   it('does not propagate a manual match over a different explicit provider ID', async () => {
     vi.stubGlobal(
       'fetch',

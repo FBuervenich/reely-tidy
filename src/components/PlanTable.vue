@@ -11,6 +11,7 @@ const emit = defineEmits<{
   searchMatches: [row: PlanRow, query: string]
   useFilename: [row: PlanRow]
   setEpisodes: [row: PlanRow, season: number, episodes: number[]]
+  setMediaKind: [row: PlanRow, kind: 'movie' | 'series']
   assignSidecar: [path: string, rowId: string]
   setEnabled: [row: PlanRow, enabled: boolean]
 }>()
@@ -55,6 +56,12 @@ function confirmMatch(candidate: TmdbResult): void {
 function chooseFilename(): void {
   if (matchEditor.value) emit('useFilename', matchEditor.value)
   matchDialog.value?.close()
+}
+function chooseMediaKind(kind: 'movie' | 'series'): void {
+  if (!matchEditor.value) return
+  emit('setMediaKind', matchEditor.value, kind)
+  seasonInput.value = matchEditor.value.season ?? 1
+  episodeInput.value = (matchEditor.value.episodes ?? [matchEditor.value.episode ?? 1]).join(', ')
 }
 function saveEpisodes(): void {
   if (!matchEditor.value) return
@@ -342,6 +349,23 @@ async function copyDestination(target: string): Promise<void> {
     >
       <div v-if="matchEditor">
         <h2>Change match</h2>
+        <fieldset class="media-kind" :disabled="matchEditor.searching">
+          <legend>Search TMDB as</legend>
+          <button
+            type="button"
+            :class="{ selected: matchEditor.kind === 'movie' }"
+            @click="chooseMediaKind('movie')"
+          >
+            Movie
+          </button>
+          <button
+            type="button"
+            :class="{ selected: matchEditor.kind === 'series' }"
+            @click="chooseMediaKind('series')"
+          >
+            Series
+          </button>
+        </fieldset>
         <p v-if="matchEditor.kind === 'series'">
           A confirmed series match applies to this series folder. Episode numbers are validated
           separately.

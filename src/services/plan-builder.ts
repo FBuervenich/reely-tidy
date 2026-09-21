@@ -28,7 +28,10 @@ export function createPlan(files: FoundFile[], baseFolders: BaseFolders, rootNam
       ...parsed,
       detection: structuredClone(parsed),
       groupKey,
-      identityKey: `confirmed-v2:${groupKey}`,
+      // A saved decision belongs to a source file. A file detected as a series episode may later
+      // be deliberately changed into a movie, so a group-level key would be unsafe here.
+      identityKey: `confirmed-v3:${rootName}/${source.path}`,
+      legacyIdentityKey: `confirmed-v2:${groupKey}`,
       confidence: 'filename',
       matchReasons: [],
       episodeValidation: 'unvalidated',

@@ -8,7 +8,7 @@ import {
   validateEpisodes,
 } from '../services/matching'
 import { addNfoContext } from '../services/context'
-import { providerIds } from '../lib/media'
+import { providerIds, type ParsedMedia } from '../lib/media'
 import {
   companionTargetName,
   createPlan,
@@ -137,10 +137,57 @@ export function useMediaPlan(
       row.episodeValidation === 'missing' ||
       (row.kind === 'series' &&
         row.episodeValidation !== 'valid' &&
-        (row.inferredEpisode || row.airDate))
+        (row.inferredEpisode ||
+          row.airDate ||
+          (row.kindOverride === 'series' && (row.season === undefined || !row.episodes?.length))))
     )
       row.state = 'needs-choice'
     else row.state = row.target ? 'ready' : 'unrecognized'
+  }
+
+  function groupKeyFor(row: PlanRow): string {
+    if (row.kind !== 'series') return `movie:${rootName.value}/${row.source.path}`
+    const parentFolder = row.source.path.slice(0, row.source.path.lastIndexOf('/'))
+    const seriesFolder = row.seriesFolder ?? parentFolder
+    return `series:${rootName.value}/${seriesFolder}:${row.title.toLowerCase()}:${row.year ?? ''}`
+  }
+
+  function matchingDetection(row: PlanRow): ParsedMedia {
+    return {
+      ...row.detection,
+      kind: row.kind,
+      season: row.season,
+      episode: row.episode,
+      episodes: row.episodes,
+      airDate: row.airDate,
+      inferredEpisode: row.inferredEpisode,
+    }
+  }
+
+  function restoreSavedMediaType(
+    row: PlanRow,
+    kind: 'movie' | 'series',
+    saved: { kind?: 'movie' | 'series'; season?: number; episodes?: number[] },
+  ): void {
+    row.kind = kind
+    row.kindOverride = kind === row.detection.kind ? undefined : kind
+    if (kind === 'series') {
+      row.season = saved.season ?? row.detection.season
+      row.episodes = saved.episodes ?? row.detection.episodes
+      row.episode = row.episodes?.[0] ?? row.detection.episode
+    } else {
+      row.season = undefined
+      row.episode = undefined
+      row.episodes = undefined
+      row.airDate = undefined
+      row.inferredEpisode = undefined
+    }
+    row.groupKey = groupKeyFor(row)
+  }
+
+  function forgetSavedMappings(row: PlanRow): void {
+    forgetMapping(row.identityKey)
+    if (row.legacyIdentityKey) forgetMapping(row.legacyIdentityKey)
   }
 
   async function enrichGroup(group: PlanRow[]): Promise<void> {
@@ -150,14 +197,21 @@ export function useMediaPlan(
     })
     try {
       const first = group[0]
-      const cached = readMappings()[first.identityKey]
+      const mappings = readMappings()
+      const cached = mappings[first.identityKey] ?? mappings[first.legacyIdentityKey ?? '']
       if (cached) {
+        const cachedKind = cached.kind ?? first.kind
+        if (cachedKind === 'unknown') return
+        const matchingRows = cached.kind && cached.kind !== first.kind ? [first] : group
+        for (const row of matchingRows) restoreSavedMediaType(row, cachedKind, cached)
         const current = await getDetails(
-          first.kind === 'series' ? 'tv' : 'movie',
+          cachedKind === 'series' ? 'tv' : 'movie',
           cached.id,
           token.value,
         )
-        await Promise.all(group.map((row) => applyMatch(row, current, 'confirmed')))
+        await Promise.all(matchingRows.map((row) => applyMatch(row, current, 'confirmed')))
+        const remaining = group.filter((row) => !matchingRows.includes(row))
+        if (remaining.length) await enrichGroup(remaining)
         return
       }
       const candidates = await findCandidates(first.detection, token.value)
@@ -198,6 +252,7 @@ export function useMediaPlan(
       row.kind = row.detection.kind = 'movie'
       row.enabled = true
     }
+    const detection = matchingDetection(row)
     row.match = match
     row.matchPending = false
     row.confidence = confidence
@@ -205,20 +260,20 @@ export function useMediaPlan(
       confidence === 'confirmed'
         ? ['User-confirmed assignment for this folder']
         : [...(match.reasons ?? [])]
-    row.title = match.title || row.detection.title
+    row.title = match.title || detection.title
     row.targetTitle = undefined
-    row.year = match.year ?? row.detection.year
+    row.year = match.year ?? detection.year
     row.episodeTitle = undefined
     row.episodeValidation = 'unvalidated'
-    row.season = row.detection.season
-    row.episode = row.detection.episode
-    row.episodes = row.detection.episodes
+    row.season = detection.season
+    row.episode = detection.episode
+    row.episodes = detection.episodes
     row.error = undefined
     try {
       const detail = await getDetails(row.kind === 'series' ? 'tv' : 'movie', match.id, token.value)
       row.targetTitle = detail.title
       if (row.kind === 'series') {
-        const validation = await validateEpisodes(row.detection, detail, token.value)
+        const validation = await validateEpisodes(detection, detail, token.value)
         row.episodeValidation = validation.status
         if (!row.matchReasons.includes(validation.reason)) row.matchReasons.push(validation.reason)
         if (validation.status === 'valid') {
@@ -251,7 +306,11 @@ export function useMediaPlan(
     try {
       await Promise.all(group.map((item) => applyMatch(item, match, 'confirmed')))
       try {
-        for (const item of group) writeMapping(item.identityKey, match)
+        for (const item of group)
+          writeMapping(item.identityKey, match, item.kind === 'series' ? 'series' : 'movie', {
+            season: item.season,
+            episodes: item.episodes,
+          })
       } catch (error) {
         row.error = `Match applied, but could not be saved: ${errorMessage(error)}`
       }
@@ -275,7 +334,7 @@ export function useMediaPlan(
           ? await resolveId(type, ids[0], token.value)
           : await searchTmdb(type, query, undefined, token.value)
       )
-        .map((candidate) => scoreCandidate(row.detection, candidate))
+        .map((candidate) => scoreCandidate(matchingDetection(row), candidate))
         .sort((a, b) => b.score! - a.score!)
       if (!row.candidates.length) row.lookupError = 'No matches found.'
     } catch (error) {
@@ -286,7 +345,7 @@ export function useMediaPlan(
   }
 
   function useFilename(row: PlanRow): void {
-    forgetMapping(row.identityKey)
+    forgetSavedMappings(row)
     Object.assign(
       row,
       {
@@ -300,6 +359,8 @@ export function useMediaPlan(
       JSON.parse(JSON.stringify(row.detection)),
     )
     row.match = undefined
+    row.kindOverride = undefined
+    row.groupKey = groupKeyFor(row)
     row.matchPending = false
     row.targetTitle = undefined
     row.confidence = 'filename'
@@ -308,6 +369,39 @@ export function useMediaPlan(
     row.episodeValidation = 'unvalidated'
     row.error = 'Unverified filename suggestion selected by user.'
     rebuildTarget(row, undefined, currentBaseFolders())
+    refreshState(row)
+    detectDuplicateTargets(rows.value)
+  }
+
+  function setMediaKind(row: PlanRow, kind: 'movie' | 'series'): void {
+    if (row.kind === kind && row.kindOverride === kind) return
+    forgetSavedMappings(row)
+    Object.assign(row, JSON.parse(JSON.stringify(row.detection)))
+    row.kind = kind
+    row.kindOverride = kind
+    row.enabled = Boolean(row.title || row.ids.length)
+    row.groupKey = groupKeyFor(row)
+    row.match = undefined
+    row.matchPending = false
+    row.candidates = []
+    row.targetTitle = undefined
+    row.confidence = 'filename'
+    row.matchReasons = []
+    row.episodeTitle = undefined
+    row.episodeValidation = 'unvalidated'
+    row.lookupError = undefined
+    row.error = undefined
+    if (kind === 'movie') {
+      row.season = undefined
+      row.episode = undefined
+      row.episodes = undefined
+      row.airDate = undefined
+      row.inferredEpisode = undefined
+    } else if (row.season === undefined || !row.episodes?.length) {
+      row.error = 'Set season and episode numbers before confirming this series match.'
+    }
+    if (kind === 'series' && (row.season === undefined || !row.episodes?.length)) row.target = ''
+    else rebuildTarget(row, undefined, currentBaseFolders())
     refreshState(row)
     detectDuplicateTargets(rows.value)
   }
@@ -321,13 +415,14 @@ export function useMediaPlan(
       episodes.some((episode) => !Number.isInteger(episode) || episode < 1 || episode > 999)
     )
       return
-    Object.assign(row.detection, {
-      season,
-      episode: episodes[0],
-      episodes: [...new Set(episodes)],
-      airDate: undefined,
-      inferredEpisode: false,
-    })
+    if (!row.kindOverride)
+      Object.assign(row.detection, {
+        season,
+        episode: episodes[0],
+        episodes: [...new Set(episodes)],
+        airDate: undefined,
+        inferredEpisode: false,
+      })
     Object.assign(row, {
       season,
       episode: episodes[0],
@@ -336,7 +431,12 @@ export function useMediaPlan(
       inferredEpisode: false,
     })
     if (row.match) void selectMatchForRow(row)
-    else useFilename(row)
+    else if (row.kindOverride) {
+      row.error = 'Search for and select a TMDB match.'
+      rebuildTarget(row, undefined, currentBaseFolders())
+      refreshState(row)
+      detectDuplicateTargets(rows.value)
+    } else useFilename(row)
   }
   async function selectMatchForRow(row: PlanRow): Promise<void> {
     row.searching = true
@@ -491,6 +591,7 @@ export function useMediaPlan(
     searchMatches,
     useFilename,
     setEpisodes,
+    setMediaKind,
     assignSidecar,
     updateTarget,
     setEnabled,
