@@ -71,7 +71,7 @@ const copiedDestination = ref('')
 const filteredRows = computed(() =>
   props.filter === 'all' ? props.rows : props.rows.filter((row) => row.state === props.filter),
 )
-const selectableRows = computed(() => props.rows.filter((row) => row.state !== 'done'))
+const selectableRows = computed(() => props.rows.filter((row) => row.state === 'ready'))
 const hasSelectableRows = computed(() => selectableRows.value.length > 0)
 const allSelectableRowsSelected = computed(
   () => hasSelectableRows.value && selectableRows.value.every((row) => row.enabled),
@@ -192,10 +192,10 @@ async function copyDestination(target: string): Promise<void> {
           <tr v-for="row in group.rows" :key="row.id" :class="{ disabled: !row.enabled }">
             <td class="selection-column">
               <input
+                v-if="row.state === 'ready'"
                 :checked="row.enabled"
                 type="checkbox"
                 :aria-label="`Select ${row.source.name}`"
-                :disabled="row.state === 'done'"
                 @change="emit('setEnabled', row, ($event.target as HTMLInputElement).checked)"
               />
             </td>
