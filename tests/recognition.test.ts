@@ -54,6 +54,30 @@ describe('filename and folder parsing', () => {
     expect(row.target).toContain('Season 00/')
     expect(row.target).toContain('S00E01')
   })
+  it('recognizes calendar-season episode numbers without including them in the title', () => {
+    const name =
+      'Alles.was.zahlt.S2009E585.Folge.585.German.576p.RTLP.WEB-DL.AAC2.0.H.264-GLOTZE.mkv'
+    expect(parseMediaName(name)).toMatchObject({
+      kind: 'series',
+      title: 'Alles was zahlt',
+      season: 2009,
+      episode: 585,
+      episodes: [585],
+    })
+    const row = createPlan([file(name)], { root: '_clean' })[0]
+    expect(row.target).toContain('Season 2009/')
+    expect(row.target).toContain('S2009E585')
+  })
+  it('retains the episode-title hint after a calendar-season marker', () => {
+    expect(parseMediaName('Tatort.S2000E15.Das.letzte.Rodeo.GERMAN.576p.mkv')).toMatchObject({
+      kind: 'series',
+      title: 'Tatort',
+      season: 2000,
+      episode: 15,
+      calendarSeasonYear: 2000,
+      episodeTitleHint: 'Das letzte Rodeo',
+    })
+  })
   it('recognizes dates before years and requires validation', () => {
     const row = createPlan([file('Show.2024.09.19.1080p.mkv')], { root: '_clean' })[0]
     expect(row).toMatchObject({
@@ -288,6 +312,37 @@ describe('TMDB strategy and validation', () => {
     expect((await validateEpisodes(parsed, { id: 1, title: 'Dark' }, 'token')).status).toBe(
       'unvalidated',
     )
+  })
+  it('maps a calendar-season episode to TMDBs numbered season using its air year and title', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) =>
+        url.includes('/season/2000')
+          ? response({}, 404)
+          : response({
+              episodes: [
+                {
+                  season_number: 30,
+                  episode_number: 15,
+                  air_date: '2000-07-09',
+                  name: 'Das letzte Rodeo',
+                },
+              ],
+            }),
+      ),
+    )
+    expect(
+      await validateEpisodes(
+        parseMediaName('Tatort.S2000E15.Das.letzte.Rodeo.GERMAN.576p.mkv'),
+        { id: 1, title: 'Tatort', seasons: [30] },
+        'token',
+      ),
+    ).toMatchObject({
+      status: 'valid',
+      season: 30,
+      episodes: [15],
+      title: 'Das letzte Rodeo',
+    })
   })
   it('validates every episode in a combined file', async () => {
     vi.stubGlobal(

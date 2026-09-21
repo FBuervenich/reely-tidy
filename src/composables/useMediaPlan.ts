@@ -160,6 +160,8 @@ export function useMediaPlan(
       episode: row.episode,
       episodes: row.episodes,
       airDate: row.airDate,
+      calendarSeasonYear: row.calendarSeasonYear,
+      episodeTitleHint: row.episodeTitleHint,
       inferredEpisode: row.inferredEpisode,
     }
   }
@@ -354,6 +356,7 @@ export function useMediaPlan(
         episode: undefined,
         episodes: undefined,
         airDate: undefined,
+        calendarSeasonYear: undefined,
         inferredEpisode: undefined,
       },
       JSON.parse(JSON.stringify(row.detection)),
@@ -410,7 +413,7 @@ export function useMediaPlan(
     if (
       !Number.isInteger(season) ||
       season < 0 ||
-      season > 99 ||
+      season > 9999 ||
       !episodes.length ||
       episodes.some((episode) => !Number.isInteger(episode) || episode < 1 || episode > 999)
     )
@@ -428,6 +431,7 @@ export function useMediaPlan(
       episode: episodes[0],
       episodes: [...new Set(episodes)],
       airDate: undefined,
+      calendarSeasonYear: undefined,
       inferredEpisode: false,
     })
     if (row.match) void selectMatchForRow(row)

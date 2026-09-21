@@ -29,6 +29,10 @@ export interface ParsedMedia {
   episode?: number
   episodes?: number[]
   airDate?: string
+  /** A four-digit season component such as S2000E15; may need resolving to a TMDB season. */
+  calendarSeasonYear?: number
+  /** Text between an episode marker and release tags, used to validate ambiguous long-running shows. */
+  episodeTitleHint?: string
   ids: ProviderId[]
   interpretations: Interpretation[]
   scene: SceneInfo
@@ -97,7 +101,7 @@ export function parseMediaName(fileName: string, path = fileName, rootName = '')
   const seasonIndex =
     dirs
       .map((dir, index) =>
-        /^(?:season|staffel|s)[ ._-]*\d{1,2}$/i.test(dir) || /^specials$/i.test(dir) ? index : -1,
+        /^(?:season|staffel|s)[ ._-]*\d{1,4}$/i.test(dir) || /^specials$/i.test(dir) ? index : -1,
       )
       .filter((index) => index >= 0)
       .pop() ?? -1
@@ -111,7 +115,7 @@ export function parseMediaName(fileName: string, path = fileName, rootName = '')
     ? []
     : titleInterpretations(folder, 'folder')
   const episodeMatch =
-    /(?:^|[ ._-])(?:s(\d{1,2})[ ._-]*e(\d{1,3})((?:-\d{1,3})|(?:-?e\d{1,3})*)|(\d{1,2})x(\d{1,3})((?:-?x\d{1,3})*))(?=$|[ ._-])/i.exec(
+    /(?:^|[ ._-])(?:s(\d{1,4})[ ._-]*e(\d{1,3})((?:-\d{1,3})|(?:-?e\d{1,3})*)|(\d{1,4})x(\d{1,3})((?:-?x\d{1,3})*))(?=$|[ ._-])/i.exec(
       stem,
     )
   const dateMatch = /(?:^|[ ._-])((?:19|20)\d{2})[ ._-](\d{2})[ ._-](\d{2})(?=$|[ ._-])/.exec(stem)
@@ -121,6 +125,8 @@ export function parseMediaName(fileName: string, path = fileName, rootName = '')
     parsed.kind = 'series'
     parsed.season = Number(episodeMatch[1] ?? episodeMatch[4])
     parsed.episode = Number(episodeMatch[2] ?? episodeMatch[5])
+    const seasonText = episodeMatch[1] ?? episodeMatch[4] ?? ''
+    if (/^(?:19|20)\d{2}$/.test(seasonText)) parsed.calendarSeasonYear = parsed.season
     const suffix = episodeMatch[3] || episodeMatch[6] || ''
     const extra = [...suffix.matchAll(/\d+/g)].map((m) => Number(m[0]))
     parsed.episodes = [...new Set([parsed.episode, ...extra])]
@@ -135,6 +141,10 @@ export function parseMediaName(fileName: string, path = fileName, rootName = '')
         (_, i) => parsed.episode! + i,
       )
     titleStem = stem.slice(0, episodeMatch.index)
+    const hint = titleText(
+      stem.slice(episodeMatch.index + episodeMatch[0].length, scene.start ?? stem.length),
+    )
+    if (hint && !/^(?:folge|episode)\s*\d+$/i.test(hint)) parsed.episodeTitleHint = hint
     parsed.spans.push({
       field: 'episodes',
       start: episodeMatch.index,

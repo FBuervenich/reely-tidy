@@ -403,7 +403,7 @@ async function copyDestination(target: string): Promise<void> {
         </div>
         <form v-if="matchEditor.kind === 'series'" @submit.prevent="saveEpisodes">
           <label
-            >Season<input v-model.number="seasonInput" type="number" min="0" max="99" required
+            >Season<input v-model.number="seasonInput" type="number" min="0" max="9999" required
           /></label>
           <label
             >Episodes (comma-separated)<input v-model="episodeInput" pattern="[0-9, ]+" required

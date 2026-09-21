@@ -194,6 +194,57 @@ export interface EpisodeValidation {
   title?: string
   reason: string
 }
+
+const normalizeEpisodeTitle = (value: string) =>
+  value
+    .normalize('NFKD')
+    .replace(/\p{M}/gu, '')
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]/gu, '')
+
+async function resolveCalendarSeasonEpisode(
+  parsed: ParsedMedia,
+  match: TmdbResult,
+  token: string,
+): Promise<EpisodeValidation> {
+  const year = parsed.calendarSeasonYear!
+  const seasons = match.seasons ?? (await getDetails('tv', match.id, token)).seasons ?? []
+  const episodes = (
+    await Promise.all(
+      seasons.map(async (season) => {
+        try {
+          return await getSeason(match.id, season, token)
+        } catch (error) {
+          if (error instanceof TmdbError && error.status === 404) return []
+          throw error
+        }
+      }),
+    )
+  ).flat()
+  const candidates = episodes.filter(
+    (episode) =>
+      episode.episode_number === parsed.episode && episode.air_date?.startsWith(`${year}-`),
+  )
+  const hint = parsed.episodeTitleHint && normalizeEpisodeTitle(parsed.episodeTitleHint)
+  const titleMatches = hint
+    ? candidates.filter((episode) => normalizeEpisodeTitle(episode.name ?? '') === hint)
+    : []
+  const resolved = titleMatches.length ? titleMatches : candidates
+  if (resolved.length === 1)
+    return {
+      status: 'valid',
+      season: resolved[0].season_number,
+      episodes: [resolved[0].episode_number],
+      title: resolved[0].name,
+      reason: 'Calendar-season year, episode number, and TMDB metadata match',
+    }
+  return {
+    status: 'missing',
+    reason: resolved.length
+      ? 'Calendar-season episode is ambiguous on TMDB'
+      : 'Calendar-season episode does not exist on TMDB',
+  }
+}
 export async function validateEpisodes(
   parsed: ParsedMedia,
   match: TmdbResult,
@@ -234,11 +285,13 @@ export async function validateEpisodes(
     const episodes = numbers.map((number) =>
       season.find((episode) => episode.episode_number === number),
     )
-    if (episodes.some((episode) => !episode))
+    if (episodes.some((episode) => !episode)) {
+      if (parsed.calendarSeasonYear) return resolveCalendarSeasonEpisode(parsed, match, token)
       return {
         status: 'missing',
         reason: `Episode not found: S${parsed.season}E${numbers.filter((_, i) => !episodes[i]).join(', E')}`,
       }
+    }
     return {
       status: 'valid',
       season: parsed.season,
@@ -250,6 +303,8 @@ export async function validateEpisodes(
       reason: 'All episodes exist in season metadata',
     }
   } catch (error) {
+    if (parsed.calendarSeasonYear && error instanceof TmdbError && error.status === 404)
+      return resolveCalendarSeasonEpisode(parsed, match, token)
     return error instanceof TmdbError && error.status === 404
       ? { status: 'missing', reason: 'Season or episode does not exist on TMDB' }
       : {
