@@ -10,6 +10,17 @@ export const SIDECAR_EXTENSIONS = new Set([
   'webp',
   'tbn',
 ])
+
+/** Release samples are video files but belong to the main release, not the rename plan itself. */
+export function isSampleFile(name: string, path = name): boolean {
+  const stem = stemOf(name)
+  if (/(?:^|[ ._-])samples?(?:$|[ ._-])/i.test(stem)) return true
+  return path
+    .replaceAll('\\', '/')
+    .split('/')
+    .slice(0, -1)
+    .some((directory) => /^samples?$/i.test(directory))
+}
 export type MediaKind = 'movie' | 'series' | 'unknown'
 export interface ProviderId {
   provider: 'tmdb' | 'imdb'

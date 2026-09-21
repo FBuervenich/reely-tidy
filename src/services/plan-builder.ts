@@ -1,5 +1,6 @@
 import {
   extensionOf,
+  isSampleFile,
   parseMediaName,
   SIDECAR_EXTENSIONS,
   stemOf,
@@ -14,7 +15,9 @@ export interface BaseFolders {
 }
 
 export function createPlan(files: FoundFile[], baseFolders: BaseFolders, rootName = ''): PlanRow[] {
-  const videos = files.filter((file) => VIDEO_EXTENSIONS.has(extensionOf(file.name)))
+  const videos = files.filter(
+    (file) => VIDEO_EXTENSIONS.has(extensionOf(file.name)) && !isSampleFile(file.name, file.path),
+  )
   const rows = videos.map((source, index) => {
     const parsed = parseMediaName(source.name, source.path, rootName)
     const groupKey =
@@ -50,7 +53,11 @@ export function createPlan(files: FoundFile[], baseFolders: BaseFolders, rootNam
     rebuildTarget(row, undefined, baseFolders)
     return row
   })
-  for (const file of files.filter((item) => SIDECAR_EXTENSIONS.has(extensionOf(item.name)))) {
+  for (const file of files.filter(
+    (item) =>
+      SIDECAR_EXTENSIONS.has(extensionOf(item.name)) ||
+      (VIDEO_EXTENSIONS.has(extensionOf(item.name)) && isSampleFile(item.name, item.path)),
+  )) {
     const matches = rows
       .filter((row) => isMatchingSidecar(row.source, file))
       .sort((a, b) => stemOf(b.source.name).length - stemOf(a.source.name).length)
@@ -107,10 +114,18 @@ export function createPlan(files: FoundFile[], baseFolders: BaseFolders, rootNam
 }
 
 function isMatchingSidecar(source: FoundFile, candidate: FoundFile): boolean {
+  const candidateIsSample = isSampleFile(candidate.name, candidate.path)
+  const sourceDirectory = parentDirectory(source.path)
+  const candidateDirectory = parentDirectory(candidate.path)
+  const sampleDirectory = sampleOwnerDirectory(candidate.path)
   if (
-    candidate.path.slice(0, candidate.path.lastIndexOf('/') + 1) !==
-      source.path.slice(0, source.path.lastIndexOf('/') + 1) ||
-    !SIDECAR_EXTENSIONS.has(extensionOf(candidate.name))
+    !SIDECAR_EXTENSIONS.has(extensionOf(candidate.name)) &&
+    !(candidateIsSample && VIDEO_EXTENSIONS.has(extensionOf(candidate.name)))
+  )
+    return false
+  if (
+    candidateDirectory !== sourceDirectory &&
+    (!candidateIsSample || sampleDirectory !== sourceDirectory)
   )
     return false
   const sourceName = source.name.toLocaleLowerCase()
@@ -119,8 +134,25 @@ function isMatchingSidecar(source: FoundFile, candidate: FoundFile): boolean {
   return (
     candidateStem === sourceStem ||
     candidateStem === sourceName ||
-    candidateStem.startsWith(`${sourceStem}.`)
+    candidateStem.startsWith(`${sourceStem}.`) ||
+    // A bare sample file in the source or a dedicated Sample(s) folder is associated with the
+    // sole video there; multiple videos deliberately produce the existing owner choice.
+    (candidateIsSample && /^(?:samples?)$/i.test(candidateStem))
   )
+}
+
+function parentDirectory(path: string): string {
+  const normalized = path.replaceAll('\\', '/')
+  const separator = normalized.lastIndexOf('/')
+  return separator < 0 ? '' : normalized.slice(0, separator)
+}
+
+function sampleOwnerDirectory(path: string): string | undefined {
+  const directories = path.replaceAll('\\', '/').split('/').slice(0, -1)
+  const sampleIndex = directories
+    .map((directory) => /^samples?$/i.test(directory))
+    .lastIndexOf(true)
+  return sampleIndex >= 0 ? directories.slice(0, sampleIndex).join('/') : undefined
 }
 
 export function rebuildTarget(
@@ -140,14 +172,21 @@ export function rebuildTarget(
   else row.target = ''
 }
 
-export function companionTargetName(row: PlanRow, originalName: string): string {
+export function companionTargetName(row: PlanRow, original: FoundFile | string): string {
   const targetName = row.target.split('/').pop()
   if (!targetName) throw new Error('Invalid destination path for sidecar file.')
+  const originalName = typeof original === 'string' ? original : original.name
   const sourceStem = stemOf(row.source.name)
   const sidecarStem = stemOf(originalName)
+  const sample = isSampleFile(
+    originalName,
+    typeof original === 'string' ? originalName : original.path,
+  )
   const qualifier = sidecarStem.toLocaleLowerCase().startsWith(`${sourceStem.toLocaleLowerCase()}.`)
     ? sidecarStem.slice(sourceStem.length)
-    : ''
+    : sample
+      ? '.sample'
+      : ''
   return `${targetName.replace(/\.[^.]+$/, '')}${qualifier}.${extensionOf(originalName)}`
 }
 
@@ -168,7 +207,7 @@ export function detectDuplicateTargets(rows: PlanRow[]): void {
     const folder = row.target.slice(0, row.target.lastIndexOf('/') + 1)
     const targets = [
       row.target,
-      ...row.sidecars.map((file) => folder + companionTargetName(row, file.name)),
+      ...row.sidecars.map((file) => folder + companionTargetName(row, file)),
     ]
     for (const target of targets) {
       const prior = seen.get(target.toLowerCase())

@@ -525,7 +525,7 @@ export function useMediaPlan(
         const destination = await getDestination(root.value, row.target)
         const names = [
           destination.name,
-          ...row.sidecars.map((file) => companionTargetName(row, file.name)),
+          ...row.sidecars.map((file) => companionTargetName(row, file)),
         ]
         for (const name of names)
           if (await fileExists(destination.folder, name)) {
@@ -543,11 +543,7 @@ export function useMediaPlan(
           const destination = await getDestination(root.value, row.target)
           await moveFile(row.source.handle, destination.folder, destination.name)
           for (const sidecar of row.sidecars)
-            await moveFile(
-              sidecar.handle,
-              destination.folder,
-              companionTargetName(row, sidecar.name),
-            )
+            await moveFile(sidecar.handle, destination.folder, companionTargetName(row, sidecar))
           row.state = 'done'
           logs.value.push({ source: row.source.path, target: row.target, result: 'Moved' })
         } catch (error) {

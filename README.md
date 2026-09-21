@@ -40,7 +40,7 @@ The preview distinguishes **Unverified filename suggestion**, **Metadata match**
 
 Season data and identical requests are shared during a scan, with at most four network requests in flight. Missing episodes require review. Network failures leave episodes explicitly unvalidated; they do not prove that an episode is missing. Date-based and folder-inferred episode numbers require validation before execution. Explicit filename suggestions remain usable and visibly unverified.
 
-Each sidecar belongs to the longest matching video stem. Tied stems require a video choice or **Leave sidecar in place**. Scene tags preserve audio punctuation such as `DDP5.1`; the release group is rendered separately and is not included in `{sceneTags}`.
+Each sidecar belongs to the longest matching video stem. Video files named as samples, or inside a `Sample`/`Samples` directory, are carried as sidecars too. Tied stems require a video choice or **Leave sidecar in place**. Scene tags preserve audio punctuation such as `DDP5.1`; the release group is rendered separately and is not included in `{sceneTags}`.
 
 ## Develop locally
 

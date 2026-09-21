@@ -137,6 +137,22 @@ describe('release tags and sidecars', () => {
     const rows = createPlan([file('A/Movie.mkv'), file('B/Movie.en.srt')], { root: '_clean' })
     expect(rows[0].sidecars).toHaveLength(0)
   })
+  it('treats sample videos as sidecars instead of standalone media', () => {
+    const rows = createPlan([file('Movie.2025.mkv'), file('Movie.2025.sample.mp4')], {
+      root: '_clean',
+    })
+    expect(rows).toHaveLength(1)
+    expect(rows[0].sidecars.map((item) => item.name)).toEqual(['Movie.2025.sample.mp4'])
+    expect(companionTargetName(rows[0], rows[0].sidecars[0])).toMatch(/\.sample\.mp4$/)
+  })
+  it('carries a bare sample video from a Sample folder with its sole main video', () => {
+    const rows = createPlan([file('Movie/Movie.2025.mkv'), file('Movie/Sample/sample.mkv')], {
+      root: '_clean',
+    })
+    expect(rows).toHaveLength(1)
+    expect(rows[0].sidecars.map((item) => item.path)).toEqual(['Movie/Sample/sample.mkv'])
+    expect(companionTargetName(rows[0], rows[0].sidecars[0])).toMatch(/\.sample\.mkv$/)
+  })
 })
 
 describe('context and candidate evidence', () => {
