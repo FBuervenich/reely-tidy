@@ -94,7 +94,7 @@ const editingRow = computed(() =>
 const groups = computed(() => {
   const definitions: { key: PlanRow['kind']; label: string }[] = [
     { key: 'movie', label: 'Movies' },
-    { key: 'series', label: 'Shows' },
+    { key: 'series', label: 'TV Shows' },
     { key: 'unknown', label: 'Unrecognized' },
   ]
   return definitions
@@ -236,7 +236,7 @@ async function copyDestination(target: string): Promise<void> {
               </label>
             </td>
             <td>
-              <b>{{ row.kind === 'movie' ? 'Movie' : row.kind === 'series' ? 'Show' : '—' }}</b
+              <b>{{ row.kind === 'movie' ? 'Movie' : row.kind === 'series' ? 'TV Show' : '—' }}</b
               ><small
                 >{{ row.title || 'Unrecognized'
                 }}{{
@@ -363,11 +363,11 @@ async function copyDestination(target: string): Promise<void> {
             :class="{ selected: matchEditor.kind === 'series' }"
             @click="chooseMediaKind('series')"
           >
-            Series
+            TV Show
           </button>
         </fieldset>
         <p v-if="matchEditor.kind === 'series'">
-          A confirmed series match applies to this series folder. Episode numbers are validated
+          A confirmed TV show match applies to this TV show folder. Episode numbers are validated
           separately.
         </p>
         <form @submit.prevent="emit('searchMatches', matchEditor, matchQuery)">

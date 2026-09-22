@@ -35,8 +35,8 @@ const sampleMovie = {
 } as PlanRow
 const sampleSeries = {
   kind: 'series',
-  title: 'Series Name',
-  targetTitle: 'Series Name',
+  title: 'TV Show Name',
+  targetTitle: 'TV Show Name',
   year: 2024,
   season: 1,
   episode: 2,
@@ -154,8 +154,8 @@ function clearToken(): void {
         <fieldset>
           <legend>Naming presets</legend>
           <p>
-            Build movie and show paths from as many subfolders and filename blocks as you need. The
-            “Standard” preset preserves ReelyTidy’s original layout.
+            Build movie and TV show paths from as many subfolders and filename blocks as you need.
+            The “Standard” preset preserves ReelyTidy’s original layout.
           </p>
           <p>
             <code>Scene tags</code> starts at a recognised technical marker (such as 2160p, WEB-DL,
@@ -202,7 +202,7 @@ function clearToken(): void {
               @update:template="updateTemplate('movie', $event)"
             />
             <NamingTemplateBuilder
-              title="Shows"
+              title="TV Shows"
               :template="selectedPreset.series"
               :allowed-tokens="[
                 'title',

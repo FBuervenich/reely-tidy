@@ -7,7 +7,7 @@ ReelyTidy is a private, browser-based media organizer. It scans a folder of movi
 
 - Runs fully in your browser.
 - Keeps media files on your device; there is no ReelyTidy backend or tracking.
-- Looks up movie, series, season, and episode metadata directly from TMDB.
+- Looks up movie, TV show, season, and episode metadata directly from TMDB.
 - Provides a preview before files are moved.
 - Supports configurable folder and file-name presets for movies and TV shows.
 - Carries matching sidecar files, such as subtitles, along with video files.
@@ -32,11 +32,11 @@ The TMDB token and settings are stored only in your browser. Original empty sour
 
 ## Recognition and review
 
-The parser combines filenames, series/season folders, neighboring files, and explicit TMDB or IMDb IDs. Matching `movie.nfo`, `tvshow.nfo`, and movie-specific NFO files can provide IDs. NFO reads are limited to 1 MB. Season 00, combined episodes (`S01E01E02`, `S01E01-E02`), and air dates are supported. Numeric files inside season folders remain pending until their episode numbers are verified or explicitly corrected.
+The parser combines filenames, TV show/season folders, neighboring files, and explicit TMDB or IMDb IDs. Matching `movie.nfo`, `tvshow.nfo`, and movie-specific NFO files can provide IDs. NFO reads are limited to 1 MB. Season 00, combined episodes (`S01E01E02`, `S01E01-E02`), and air dates are supported. Numeric files inside season folders remain pending until their episode numbers are verified or explicitly corrected.
 
 TMDB lookup first resolves IDs, then searches titles with and without a year, and finally tries folder or alternative interpretations. The five highest-ranked candidates are checked against original/alternative titles and season metadata. Exact titles score 65, matching years add 25, verified IDs add 100, and existing episodes add 20. A match is automatic only with strong evidence, no contradictions, and a lead of at least 20 points. These are explainable heuristics, not calibrated probabilities.
 
-The preview distinguishes **Unverified filename suggestion**, **Metadata match**, and **User confirmed**. Use **Change match** or **Search / choose match** for free-text search, `tmdb:123` or `tt1234567`, and episode corrections. Confirmed series choices apply to the matching group and are saved locally; automatic matches are not saved as user decisions. **Use filename / forget saved match** removes the saved choice. Legacy automatic assignments are intentionally not reused.
+The preview distinguishes **Unverified filename suggestion**, **Metadata match**, and **User confirmed**. Use **Change match** or **Search / choose match** for free-text search, `tmdb:123` or `tt1234567`, and episode corrections. Confirmed TV show choices apply to the matching group and are saved locally; automatic matches are not saved as user decisions. **Use filename / forget saved match** removes the saved choice. Legacy automatic assignments are intentionally not reused.
 
 Season data and identical requests are shared during a scan, with at most four network requests in flight. Missing episodes require review. Network failures leave episodes explicitly unvalidated; they do not prove that an episode is missing. Date-based and folder-inferred episode numbers require validation before execution. Explicit filename suggestions remain usable and visibly unverified.
 

@@ -72,6 +72,16 @@ function saveSettings(settings: {
   resetPlanForSettingsChange()
   page.value = 'renamer'
 }
+
+function confirmMove(): void {
+  if (
+    window.confirm(
+      `Move ${readyCount.value} selected file${readyCount.value === 1 ? '' : 's'} now? This will rename and organize them in the selected folder.`,
+    )
+  ) {
+    void moveAll()
+  }
+}
 </script>
 
 <template>
@@ -104,7 +114,7 @@ function saveSettings(settings: {
       :supports-move="supportsMove"
       :file-system-api-available="fileSystemApiAvailable"
       :on-choose-and-scan="chooseAndScan"
-      @move="moveAll"
+      @move="confirmMove"
     />
 
     <div v-if="readingFiles" class="scan-loading" role="status">

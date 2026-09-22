@@ -33,7 +33,7 @@ watch(
     <h3>How it works</h3>
     <ol class="about-list">
       <li>Choose a folder.</li>
-      <li>ReelyTidy automatically identifies movies and shows.</li>
+      <li>ReelyTidy automatically identifies movies and TV shows.</li>
       <li>Review the migration plan, then move files into a clean folder structure.</li>
       <li>
         Original folders remain because of browser limitations. You can remove them manually

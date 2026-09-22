@@ -33,7 +33,7 @@ export function writeTmdbToken(token: string): void {
 
 export function readSettings(): AppSettings {
   const legacyMoviesBaseFolder = localStorage.getItem(MOVIES_FOLDER_KEY) ?? 'Movies'
-  const legacyShowsBaseFolder = localStorage.getItem(SHOWS_FOLDER_KEY) ?? 'Shows'
+  const legacyShowsBaseFolder = localStorage.getItem(SHOWS_FOLDER_KEY) ?? 'TV Shows'
   const namingPresets = readNamingPresets(legacyMoviesBaseFolder, legacyShowsBaseFolder)
   const savedActivePreset = localStorage.getItem(ACTIVE_PRESET_KEY)
   return {

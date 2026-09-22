@@ -63,7 +63,7 @@ const defaultMovie: NamingTemplate = {
 
 const defaultSeries: NamingTemplate = {
   folders: [
-    [{ id: 'series-base-folder', type: 'text', value: 'Shows' }],
+    [{ id: 'series-base-folder', type: 'text', value: 'TV Shows' }],
     [
       { id: 'series-folder-title', type: 'token', token: 'title' },
       { id: 'series-folder-open-year', type: 'text', value: ' (' },
@@ -91,7 +91,7 @@ const defaultSeries: NamingTemplate = {
 
 export function defaultNamingPreset(
   movieBaseFolder = 'Movies',
-  showsBaseFolder = 'Shows',
+  showsBaseFolder = 'TV Shows',
 ): NamingPreset {
   const preset = cloneNamingPreset({
     id: 'standard',
@@ -117,7 +117,7 @@ export function migratePresetBaseFolders(
     { id: `${upgraded.id}-movie-base-folder`, type: 'text', value: movieBaseFolder || 'Movies' },
   ])
   upgraded.series.folders.unshift([
-    { id: `${upgraded.id}-series-base-folder`, type: 'text', value: showsBaseFolder || 'Shows' },
+    { id: `${upgraded.id}-series-base-folder`, type: 'text', value: showsBaseFolder || 'TV Shows' },
   ])
   return upgraded
 }
