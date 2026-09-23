@@ -1,4 +1,5 @@
 import type { FoundFile } from '../types/plan'
+import { isAppleDoubleFile } from '../lib/media'
 
 export function supportsNativeMove(): boolean {
   return (
@@ -48,7 +49,7 @@ export async function listFiles(
     if (entry.kind === 'directory') {
       if (!ignoredAtRoot)
         files.push(...(await listFiles(entry as FileSystemDirectoryHandle, options, path)))
-    } else
+    } else if (!isAppleDoubleFile(entry.name))
       files.push({ name: entry.name, path, handle: entry as FileSystemFileHandle, parent: folder })
   }
   return files

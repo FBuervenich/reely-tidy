@@ -1,5 +1,6 @@
 import {
   extensionOf,
+  isAppleDoubleFile,
   isSampleFile,
   parseMediaName,
   SIDECAR_EXTENSIONS,
@@ -15,7 +16,9 @@ export interface BaseFolders {
 }
 
 export function createPlan(files: FoundFile[], baseFolders: BaseFolders, rootName = ''): PlanRow[] {
-  const videos = files.filter(
+  // Keep this guard in addition to listFiles: createPlan is also used with supplied file lists.
+  const usableFiles = files.filter((file) => !isAppleDoubleFile(file.name))
+  const videos = usableFiles.filter(
     (file) => VIDEO_EXTENSIONS.has(extensionOf(file.name)) && !isSampleFile(file.name, file.path),
   )
   const rows = videos.map((source, index) => {
@@ -53,7 +56,7 @@ export function createPlan(files: FoundFile[], baseFolders: BaseFolders, rootNam
     rebuildTarget(row, undefined, baseFolders)
     return row
   })
-  for (const file of files.filter(
+  for (const file of usableFiles.filter(
     (item) =>
       SIDECAR_EXTENSIONS.has(extensionOf(item.name)) ||
       (VIDEO_EXTENSIONS.has(extensionOf(item.name)) && isSampleFile(item.name, item.path)),

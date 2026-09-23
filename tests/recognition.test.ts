@@ -685,6 +685,19 @@ describe('additional context and execution safeguards', () => {
     expect(plan.rows.value[0]).toMatchObject({ state: 'ready', episodeValidation: 'unvalidated' })
     expect(plan.rows.value[0].error).toContain('offline')
   })
+  it('ignores macOS AppleDouble files instead of treating them as duplicate videos or sidecars', () => {
+    const rows = createPlan(
+      [
+        file('Movie.2021.mkv'),
+        file('._Movie.2021.mkv'),
+        file('Movie.2021.en.srt'),
+        file('._Movie.2021.en.srt'),
+      ],
+      { root: '_clean' },
+    )
+    expect(rows).toHaveLength(1)
+    expect(rows[0].sidecars.map((sidecar) => sidecar.path)).toEqual(['Movie.2021.en.srt'])
+  })
   it('keeps inferred numbering pending on network failure', async () => {
     vi.stubGlobal(
       'fetch',

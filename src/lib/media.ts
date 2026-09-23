@@ -55,6 +55,10 @@ export interface ParsedMedia {
 export function extensionOf(name: string): string {
   return name.includes('.') ? name.slice(name.lastIndexOf('.') + 1).toLowerCase() : ''
 }
+/** macOS resource-fork sidecars, not user media files. */
+export function isAppleDoubleFile(name: string): boolean {
+  return name.startsWith('._')
+}
 export function stemOf(name: string): string {
   return name.includes('.') ? name.slice(0, name.lastIndexOf('.')) : name
 }
