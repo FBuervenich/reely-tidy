@@ -1,12 +1,13 @@
 <script setup lang="ts">
 import { computed, nextTick, ref } from 'vue'
+import { vStickyHeight } from '../directives/stickyHeight'
 import { pad } from '../lib/media'
 import { posterUrl, type TmdbResult } from '../lib/tmdb'
 import type { PlanFilter, PlanRow } from '../types/plan'
 
 const emit = defineEmits<{
   'update:filter': [filter: PlanFilter]
-  selectMatch: [row: PlanRow, match: TmdbResult]
+  selectMatch: [row: PlanRow, match: TmdbResult, applyToMatchingEpisodes?: boolean]
   updateTarget: [row: PlanRow, target: string]
   searchMatches: [row: PlanRow, query: string]
   useFilename: [row: PlanRow]
@@ -41,6 +42,9 @@ const matchDialog = ref<HTMLDialogElement>()
 const matchQuery = ref('')
 const seasonInput = ref(1)
 const episodeInput = ref('1')
+const seriesAssignmentDialog = ref<HTMLDialogElement>()
+const pendingSeriesAssignment = ref<{ row: PlanRow; match: TmdbResult; otherEpisodes: number }>()
+const selectedCandidates = ref<Record<string, string>>({})
 async function editMatch(row: PlanRow): Promise<void> {
   matchEditor.value = row
   matchQuery.value = row.detection.title
@@ -49,9 +53,38 @@ async function editMatch(row: PlanRow): Promise<void> {
   await nextTick()
   matchDialog.value?.showModal()
 }
-function confirmMatch(candidate: TmdbResult): void {
-  if (matchEditor.value) emit('selectMatch', matchEditor.value, candidate)
+function matchingEpisodeCount(row: PlanRow): number {
+  if (row.kind !== 'series') return 0
+  return props.rows.filter(
+    (other) =>
+      other.id !== row.id &&
+      other.kind === 'series' &&
+      other.state !== 'done' &&
+      other.title.toLocaleLowerCase() === row.title.toLocaleLowerCase() &&
+      (!other.ids.length || JSON.stringify(other.ids) === JSON.stringify(row.ids)),
+  ).length
+}
+async function confirmMatch(row: PlanRow, candidate: TmdbResult): Promise<void> {
+  const otherEpisodes = matchingEpisodeCount(row)
+  if (!otherEpisodes) {
+    emit('selectMatch', row, candidate, false)
+    matchDialog.value?.close()
+    return
+  }
+  pendingSeriesAssignment.value = { row, match: candidate, otherEpisodes }
   matchDialog.value?.close()
+  await nextTick()
+  seriesAssignmentDialog.value?.showModal()
+}
+function applySeriesAssignment(applyToMatchingEpisodes: boolean): void {
+  const assignment = pendingSeriesAssignment.value
+  if (assignment) emit('selectMatch', assignment.row, assignment.match, applyToMatchingEpisodes)
+  seriesAssignmentDialog.value?.close()
+}
+function clearSeriesAssignment(): void {
+  if (pendingSeriesAssignment.value)
+    selectedCandidates.value[pendingSeriesAssignment.value.row.id] = ''
+  pendingSeriesAssignment.value = undefined
 }
 function chooseFilename(): void {
   if (matchEditor.value) emit('useFilename', matchEditor.value)
@@ -106,7 +139,8 @@ const groups = computed(() => {
 })
 function chooseCandidate(row: PlanRow, event: Event): void {
   const value = (event.target as HTMLSelectElement).value
-  if (value !== '') emit('selectMatch', row, row.candidates[Number(value)])
+  selectedCandidates.value[row.id] = value
+  if (value !== '') void confirmMatch(row, row.candidates[Number(value)])
 }
 function setAllEnabled(enabled: boolean): void {
   selectableRows.value.forEach((row) => emit('setEnabled', row, enabled))
@@ -146,19 +180,21 @@ async function copyDestination(target: string): Promise<void> {
 
 <template>
   <section class="plans" :inert="busy">
-    <div class="section-head">
-      <div><h2>Rename plan</h2></div>
-      <div class="plan-controls">
-        <nav>
-          <button
-            v-for="item in filters"
-            :key="item.value"
-            :class="{ selected: filter === item.value }"
-            @click="emit('update:filter', item.value)"
-          >
-            {{ item.label }}
-          </button>
-        </nav>
+    <div v-sticky-height="'--plan-toolbar-height'" class="plan-toolbar">
+      <div class="section-head">
+        <div><h2>Rename plan</h2></div>
+        <div class="plan-controls">
+          <nav>
+            <button
+              v-for="item in filters"
+              :key="item.value"
+              :class="{ selected: filter === item.value }"
+              @click="emit('update:filter', item.value)"
+            >
+              {{ item.label }}
+            </button>
+          </nav>
+        </div>
       </div>
     </div>
     <div class="table-wrap">
@@ -171,7 +207,7 @@ async function copyDestination(target: string): Promise<void> {
           <col class="destination-column" />
           <col class="status-column" />
         </colgroup>
-        <thead>
+        <thead v-sticky-height="'--column-head-height'">
           <tr>
             <th class="selection-column">
               <input
@@ -280,7 +316,11 @@ async function copyDestination(target: string): Promise<void> {
                   </aside>
                 </div></template
               ><template v-else-if="row.candidates.length"
-                ><select :disabled="row.searching" @change="chooseCandidate(row, $event)">
+                ><select
+                  :value="selectedCandidates[row.id] ?? ''"
+                  :disabled="row.searching"
+                  @change="chooseCandidate(row, $event)"
+                >
                   <option value="">Select a match …</option>
                   <option v-for="(candidate, i) in row.candidates" :key="candidate.id" :value="i">
                     {{ candidate.title }} ({{ candidate.year || '—' }})
@@ -324,12 +364,32 @@ async function copyDestination(target: string): Promise<void> {
                   class="destination-preview"
                   :class="{ locked: row.state === 'done' }"
                   :title="row.target"
+                  :aria-label="
+                    row.state === 'done' ? row.target : `Edit destination: ${row.target}`
+                  "
                   @click="startEditingDestination(row)"
                 >
                   <span class="destination-folders">{{
                     destinationParts(row.target).folders
                   }}</span>
                   <b class="destination-filename">{{ destinationParts(row.target).filename }}</b>
+                  <span
+                    v-if="row.state !== 'done'"
+                    class="destination-edit-icon"
+                    aria-hidden="true"
+                  >
+                    <svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="1.8"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path d="M12 20h9" />
+                      <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L9 17l-4 1 1-4L16.5 3.5Z" />
+                    </svg>
+                  </span>
                 </button>
               </div>
               <span v-else class="destination-pending">Available after selecting a match</span>
@@ -392,7 +452,7 @@ async function copyDestination(target: string): Promise<void> {
             :key="candidate.id"
             type="button"
             :disabled="matchEditor.searching"
-            @click="confirmMatch(candidate)"
+            @click="confirmMatch(matchEditor!, candidate)"
           >
             <b>{{ candidate.title }} ({{ candidate.year || '—' }}) · TMDB {{ candidate.id }}</b>
             <small>Score {{ candidate.score }} · {{ candidate.reasons?.join('; ') }}</small>
@@ -418,6 +478,39 @@ async function copyDestination(target: string): Promise<void> {
             Use filename / forget saved match
           </button>
           <button type="button" @click="matchDialog?.close()">Close</button>
+        </div>
+      </div>
+    </dialog>
+    <dialog
+      ref="seriesAssignmentDialog"
+      class="destination-dialog series-assignment-dialog"
+      @close="clearSeriesAssignment"
+    >
+      <div v-if="pendingSeriesAssignment">
+        <button
+          class="close"
+          type="button"
+          aria-label="Close assignment dialog"
+          @click="seriesAssignmentDialog?.close()"
+        >
+          ×
+        </button>
+        <h2>Assign matching episodes?</h2>
+        <p>
+          {{ pendingSeriesAssignment.otherEpisodes }} other
+          {{ pendingSeriesAssignment.otherEpisodes === 1 ? 'episode' : 'episodes' }} named “{{
+            pendingSeriesAssignment.row.title
+          }}” found in other locations.
+        </p>
+        <p>
+          Assign <b>{{ pendingSeriesAssignment.match.title }}</b> to all of them too?
+        </p>
+        <div class="dialog-actions">
+          <button type="button" @click="applySeriesAssignment(false)">Only this episode</button>
+          <button class="accent" type="button" @click="applySeriesAssignment(true)">
+            Assign {{ pendingSeriesAssignment.otherEpisodes }} other
+            {{ pendingSeriesAssignment.otherEpisodes === 1 ? 'episode' : 'episodes' }}
+          </button>
         </div>
       </div>
     </dialog>

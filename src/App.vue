@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import AboutDialog from './components/AboutDialog.vue'
 import BrowserSupportDialog from './components/BrowserSupportDialog.vue'
 import ExecutionLog from './components/ExecutionLog.vue'
 import PlanTable from './components/PlanTable.vue'
 import SettingsPage from './components/SettingsPage.vue'
 import WorkflowSteps from './components/WorkflowSteps.vue'
+import { vStickyHeight } from './directives/stickyHeight'
 import { useMediaPlan } from './composables/useMediaPlan'
 import { useSettings } from './composables/useSettings'
 import { defaultNamingPreset } from './lib/naming'
@@ -49,17 +50,80 @@ const {
 })
 const page = ref<'renamer' | 'settings'>('renamer')
 const aboutOpen = ref(false)
+const workspace = ref<HTMLElement>()
+const brand = ref<HTMLElement>()
+const settingsButton = ref<HTMLElement>()
+const dockReady = ref(false)
+const dockComplete = ref(false)
+let brandShift = { x: 0, y: 0 }
+let settingsShift = { x: 0, y: 0 }
 const apiCheckComplete = ref(false)
 const fileSystemApiAvailable = ref(false)
 const isFirefox = ref(false)
 const showBrowserSupportDialog = computed(
   () => apiCheckComplete.value && !fileSystemApiAvailable.value,
 )
+function updateDockProgress(): void {
+  if (!dockReady.value || !workspace.value) return
+  const progress = Math.min(1, Math.max(0, window.scrollY / 240))
+  const lateralProgress = Math.min(1, Math.max(0, window.scrollY / 90))
+  const vertical = progress * progress * (3 - 2 * progress)
+  const lateral = lateralProgress * lateralProgress * (3 - 2 * lateralProgress)
+  const style = workspace.value.style
+  style.setProperty('--brand-tx', `${brandShift.x * lateral}px`)
+  style.setProperty('--brand-ty', `${brandShift.y * vertical}px`)
+  style.setProperty('--brand-rotation', `${-90 * lateral}deg`)
+  style.setProperty('--brand-scale', String(1 - 0.5 * lateral))
+  style.setProperty('--settings-tx', `${settingsShift.x * lateral}px`)
+  style.setProperty('--settings-ty', `${settingsShift.y * vertical}px`)
+  style.setProperty('--settings-rotation', `${90 * lateral}deg`)
+  style.setProperty('--settings-scale', String(1 - 0.15 * lateral))
+  style.setProperty('--dock-detail-opacity', String(1 - lateral))
+  dockComplete.value = lateralProgress >= 1
+}
+
+async function measureDock(): Promise<void> {
+  dockReady.value = false
+  dockComplete.value = false
+  await nextTick()
+  if (!workspace.value || !brand.value || !settingsButton.value) return
+  if (!window.matchMedia('(min-width: 1100px)').matches) return
+
+  const brandRect = brand.value.getBoundingClientRect()
+  const settingsRect = settingsButton.value.getBoundingClientRect()
+  const initialTop = window.scrollY
+  const style = workspace.value.style
+  style.setProperty('--brand-x', `${brandRect.left}px`)
+  style.setProperty('--brand-y', `${brandRect.top + initialTop}px`)
+  style.setProperty('--settings-x', `${settingsRect.left}px`)
+  style.setProperty('--settings-y', `${settingsRect.top + initialTop}px`)
+  brandShift = {
+    x: 24 - (brandRect.left + brandRect.width / 2),
+    y: window.innerHeight / 2 - (brandRect.top + initialTop + brandRect.height / 2),
+  }
+  settingsShift = {
+    x: window.innerWidth - 24 - (settingsRect.left + settingsRect.width / 2),
+    y: window.innerHeight / 2 - (settingsRect.top + initialTop + settingsRect.height / 2),
+  }
+  dockReady.value = true
+  await nextTick()
+  updateDockProgress()
+}
 
 onMounted(() => {
   fileSystemApiAvailable.value = 'showDirectoryPicker' in window && window.isSecureContext
   isFirefox.value = /firefox/i.test(navigator.userAgent)
   apiCheckComplete.value = true
+  window.addEventListener('scroll', updateDockProgress, { passive: true })
+  window.addEventListener('resize', measureDock, { passive: true })
+  void measureDock()
+})
+onUnmounted(() => {
+  window.removeEventListener('scroll', updateDockProgress)
+  window.removeEventListener('resize', measureDock)
+})
+watch(page, (value) => {
+  if (value === 'renamer') void measureDock()
 })
 
 function saveSettings(settings: {
@@ -85,9 +149,14 @@ function confirmMove(): void {
 </script>
 
 <template>
-  <main v-if="page === 'renamer'">
+  <main
+    v-if="page === 'renamer'"
+    ref="workspace"
+    class="renamer-page"
+    :class="{ 'dock-ready': dockReady, 'dock-complete': dockComplete }"
+  >
     <header class="hero">
-      <div>
+      <div ref="brand" class="brand">
         <p class="eyebrow">SIMPLE LOCAL MEDIA ORGANIZER</p>
         <div class="app-name">
           <h1>ReelyTidy</h1>
@@ -95,27 +164,31 @@ function confirmMove(): void {
             class="info-button"
             type="button"
             aria-label="About ReelyTidy"
+            :aria-hidden="dockComplete"
+            :tabindex="dockComplete ? -1 : 0"
             @click="aboutOpen = true"
           >
             i
           </button>
         </div>
       </div>
-      <button class="settings" @click="page = 'settings'">
+      <button ref="settingsButton" class="settings" @click="page = 'settings'">
         ⚙ Settings <span :class="{ active: token }"></span>
       </button>
     </header>
 
-    <WorkflowSteps
-      :root-name="rootName"
-      :scanning="scanning"
-      :moving="moving"
-      :ready-count="readyCount"
-      :supports-move="supportsMove"
-      :file-system-api-available="fileSystemApiAvailable"
-      :on-choose-and-scan="chooseAndScan"
-      @move="confirmMove"
-    />
+    <div v-sticky-height="'--workflow-stack-height'" class="workflow-sticky">
+      <WorkflowSteps
+        :root-name="rootName"
+        :scanning="scanning"
+        :moving="moving"
+        :ready-count="readyCount"
+        :supports-move="supportsMove"
+        :file-system-api-available="fileSystemApiAvailable"
+        :on-choose-and-scan="chooseAndScan"
+        @move="confirmMove"
+      />
+    </div>
 
     <div v-if="readingFiles" class="scan-loading" role="status">
       <span class="loading-spinner" aria-hidden="true"></span><span>Loading files</span>

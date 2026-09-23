@@ -1,0 +1,67 @@
+<!doctype html>
+<html>
+  <head>
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Loading layout preview</title>
+  </head>
+  <body>
+    <main
+      class="renamer-page"
+      style="
+        --workflow-stack-height: 100px;
+        --plan-toolbar-height: 86px;
+        --column-head-height: 40px;
+        --plan-top-gap: 0px;
+      "
+    >
+      <div class="workflow-sticky">
+        <section class="workflow">
+          <div class="step">
+            <span>1</span>
+            <div><b>Choose folder &amp; scan</b><small>Layout preview</small></div>
+          </div>
+          <div class="step">
+            <span>2</span>
+            <div><b>Apply changes</b></div>
+          </div>
+        </section>
+      </div>
+      <div class="plan-loading-container">
+        <section class="plans">
+          <div class="plan-toolbar">
+            <div class="section-head"><h2>Rename plan</h2></div>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Source</th>
+                  <th>Detected</th>
+                  <th>TMDB</th>
+                  <th>Destination</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody id="rows"></tbody>
+            </table>
+          </div>
+        </section>
+        <div class="plan-loading-overlay" role="status">
+          <div>
+            <span class="loading-spinner" aria-hidden="true"></span><b>Loading TMDB details</b
+            ><small>TMDB metadata: 4 of 30 loaded</small>
+          </div>
+        </div>
+      </div>
+    </main>
+    <script type="module">
+      import '/src/style.css'
+      document.querySelector('#rows').innerHTML = Array.from(
+        { length: 30 },
+        (_, i) =>
+          `<tr><td>Example.Movie.${i + 1}.2025.mkv</td><td>Movie</td><td>Searching …</td><td><button class="destination-preview"><span class="destination-folders">_clean / Movies</span><b class="destination-filename">Example Movie ${i + 1}.mkv</b><span class="destination-edit-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L9 17l-4 1 1-4L16.5 3.5Z"/></svg></span></button></td><td>Ready</td></tr>`,
+      ).join('')
+      if (location.hash === '#hover') document.querySelector('.plan-loading-overlay').remove()
+    </script>
+  </body>
+</html>

@@ -239,15 +239,24 @@ h2 {
 }
 .plan-loading-overlay {
   position: absolute;
-  z-index: 10;
-  inset: 42px 0 0;
-  display: grid;
-  place-items: center;
-  border-radius: 14px;
+  z-index: 9;
+  /* Keep the overlay inside the plan border so backdrop blur cannot soften its edge. */
+  inset: calc(
+      var(--plan-top-gap, 20px) + var(--plan-toolbar-height, 78px) + var(--column-head-height, 40px)
+    )
+    1px 1px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  border-radius: 13px;
   background: rgb(8 14 23 / 76%);
   backdrop-filter: blur(2px);
 }
 .plan-loading-overlay > div {
+  position: sticky;
+  top: 16px;
+  width: min(360px, calc(100% - 32px));
+  margin-top: 16px;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -1200,6 +1209,16 @@ dialog input {
   gap: 0.75rem;
   flex-wrap: wrap;
 }
+.series-assignment-dialog {
+  width: min(560px, calc(100% - 28px));
+}
+.series-assignment-dialog > div {
+  padding: 1.5rem;
+}
+.series-assignment-dialog .dialog-actions {
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
 
 /* Warm, direct product UI inspired by PostHog's editorial visual language. */
 :root {
@@ -1347,11 +1366,117 @@ button:hover:not(:disabled) {
   font-family: 'DM Mono', monospace;
   font-weight: 500;
 }
+/* Let the page own vertical scrolling; the plan no longer creates a second scroll area. */
+.section-head {
+  position: static;
+}
+.table-wrap {
+  max-height: none;
+  overflow-x: auto;
+  overflow-y: visible;
+}
+thead th {
+  position: static;
+}
 .accent {
   border-color: var(--ink);
   background: var(--accent);
   color: var(--accent-contrast);
   box-shadow: 0 2px 0 #9f3100;
+}
+
+/* Desktop workspace mode: keep the important controls in one predictable stack. */
+@media (min-width: 1100px) {
+  .renamer-page {
+    --workflow-stack-height: 98px;
+    --workflow-gap: 20px;
+    --plan-toolbar-height: 86px;
+    --plan-top-gap: 0px;
+  }
+  .renamer-page .hero {
+    height: 96px;
+    min-height: 96px;
+  }
+  .renamer-page .workflow-sticky {
+    position: sticky;
+    top: 0;
+    z-index: 12;
+    margin-top: 18px;
+    background: var(--canvas);
+    margin-inline: -2px;
+    padding-inline: 2px;
+  }
+  .renamer-page .workflow {
+    margin-top: 0;
+  }
+  .renamer-page .plans:not(.log) {
+    margin-top: 0;
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+    overflow: visible;
+  }
+  .renamer-page .plan-toolbar {
+    position: sticky;
+    top: var(--workflow-stack-height);
+    z-index: 11;
+    padding-top: var(--workflow-gap);
+    background: var(--canvas);
+    margin-inline: -2px;
+    padding-inline: 2px;
+  }
+  .renamer-page .plan-toolbar .section-head {
+    position: static;
+    border: 1px solid var(--ink);
+    border-radius: 10px 10px 0 0;
+  }
+  .renamer-page .table-wrap {
+    overflow: visible;
+    border: 1px solid var(--ink);
+    border-top: 0;
+    background: var(--surface);
+  }
+  .renamer-page table {
+    border-collapse: separate;
+    border-spacing: 0;
+  }
+  .renamer-page thead th {
+    position: sticky;
+    top: calc(var(--workflow-stack-height) + var(--plan-toolbar-height));
+    z-index: 10;
+  }
+  .renamer-page .plan-loading-overlay > div {
+    top: calc(
+      var(--workflow-stack-height) + var(--plan-toolbar-height) + var(--column-head-height) + 16px
+    );
+  }
+  .renamer-page.dock-ready .hero .brand {
+    position: fixed;
+    top: var(--brand-y);
+    left: var(--brand-x);
+    z-index: 20;
+    transform: translate(var(--brand-tx, 0px), var(--brand-ty, 0px))
+      rotate(var(--brand-rotation, 0deg)) scale(var(--brand-scale, 1));
+    transform-origin: center;
+    will-change: transform;
+  }
+  .renamer-page.dock-ready .hero .eyebrow,
+  .renamer-page.dock-ready .hero .info-button {
+    opacity: var(--dock-detail-opacity, 1);
+  }
+  .renamer-page.dock-complete .hero .info-button {
+    visibility: hidden;
+  }
+  .renamer-page.dock-ready .hero .settings {
+    position: fixed;
+    top: var(--settings-y);
+    left: var(--settings-x);
+    z-index: 20;
+    transform: translate(var(--settings-tx, 0px), var(--settings-ty, 0px))
+      rotate(var(--settings-rotation, 0deg)) scale(var(--settings-scale, 1));
+    transform-origin: center;
+    will-change: transform;
+  }
 }
 .accent:hover:not(:disabled) {
   background: #db4300;
@@ -1498,8 +1623,38 @@ dialog input:focus,
   box-shadow: 0 0 0 3px rgb(245 78 0 / 14%);
 }
 .destination-preview {
+  position: relative;
   color: var(--ink);
   box-shadow: none;
+}
+.destination-edit-icon {
+  position: absolute;
+  top: 50%;
+  right: 6px;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border: 1px solid #e8ab56;
+  border-radius: 5px;
+  color: #74411d;
+  background: #ffedbf;
+  opacity: 0;
+  transform: translateY(-50%);
+  transition: opacity 0.15s ease;
+  pointer-events: none;
+}
+.destination-edit-icon svg {
+  width: 14px;
+  height: 14px;
+}
+.destination-preview:not(.locked) .destination-folders,
+.destination-preview:not(.locked) .destination-filename {
+  padding-right: 36px;
+}
+.destination-preview:hover .destination-edit-icon,
+.destination-preview:focus-visible .destination-edit-icon {
+  opacity: 1;
 }
 .destination-preview:hover:not(.locked) {
   background: #ffe8bd;
@@ -1737,4 +1892,11 @@ td {
   .plans {
     margin-top: 18px;
   }
+}
+
+/* `hidden` turns ancestors into scroll containers and breaks viewport sticky positioning. */
+html,
+body,
+#app {
+  overflow-x: clip;
 }

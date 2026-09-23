@@ -121,7 +121,13 @@ describe('review and correction workflows', () => {
       vi.fn(async (url: string) =>
         response(
           url.includes('/season/')
-            ? { episodes: [{ season_number: 1, episode_number: 1, name: 'First' }] }
+            ? {
+                episodes: [1, 2].map((episode_number) => ({
+                  season_number: 1,
+                  episode_number,
+                  name: `Episode ${episode_number}`,
+                })),
+              }
             : { id: 1, name: 'Dark' },
         ),
       ),
@@ -136,6 +142,50 @@ describe('review and correction workflows', () => {
     expect(first.match?.id).toBe(1)
     expect(second.match).toBeUndefined()
     expect(second.confidence).toBe('filename')
+  })
+
+  it('can limit a manual show choice to one episode', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) =>
+        response(
+          url.includes('/season/')
+            ? { episodes: [{ season_number: 1, episode_number: 1, name: 'First' }] }
+            : { id: 1, name: 'Dark' },
+        ),
+      ),
+    )
+    const plan = setupPlan(['Season 01/Dark.S01E01.mkv', 'Archive/Dark.S01E01.mkv'])
+
+    await plan.selectMatch(plan.rows.value[0], { id: 1, title: 'Dark' }, false)
+
+    expect(plan.rows.value[0].match?.id).toBe(1)
+    expect(plan.rows.value[1].match).toBeUndefined()
+  })
+
+  it('applies a manual show choice to matching episodes in other folders when requested', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) =>
+        response(
+          url.includes('/season/')
+            ? {
+                episodes: [1, 2].map((episode_number) => ({
+                  season_number: 1,
+                  episode_number,
+                  name: `Episode ${episode_number}`,
+                })),
+              }
+            : { id: 1, name: 'Dark' },
+        ),
+      ),
+    )
+    const plan = setupPlan(['Season 01/Dark.S01E01.mkv', 'Archive/Dark.S01E02.mkv'])
+
+    await plan.selectMatch(plan.rows.value[0], { id: 1, title: 'Dark' }, true)
+
+    expect(plan.rows.value.every((row) => row.match?.id === 1)).toBe(true)
+    expect(plan.rows.value.every((row) => row.state === 'ready')).toBe(true)
   })
 
   it('reports local persistence failures without discarding the applied match', async () => {

@@ -446,7 +446,7 @@ describe('TMDB strategy and validation', () => {
     ).toBe(true)
     expect(fetch).toHaveBeenCalledTimes(2)
   })
-  it('never marks S01E99 ready after a TMDB 404', async () => {
+  it('keeps a manually confirmed episode ready when TMDB cannot find its number', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn(async (url: string) =>
@@ -455,9 +455,12 @@ describe('TMDB strategy and validation', () => {
     )
     const plan = setupPlan(['Dark.S01E99.mkv'])
     await plan.selectMatch(plan.rows.value[0], { id: 1, title: 'Dark' })
-    expect(plan.rows.value[0].state).toBe('needs-choice')
+    expect(plan.rows.value[0]).toMatchObject({ state: 'ready', episodeValidation: 'unvalidated' })
+    expect(plan.rows.value[0].matchReasons).toContain(
+      'Manual assignment accepts the episode number from the filename',
+    )
     plan.updateTarget(plan.rows.value[0], '_clean/Manual.mkv')
-    expect(plan.rows.value[0].state).toBe('needs-choice')
+    expect(plan.rows.value[0].state).toBe('ready')
   })
 })
 

@@ -295,6 +295,12 @@ export function useMediaPlan(
           row.episodes = validation.episodes
           row.episode = validation.episodes?.[0]
           row.episodeTitle = validation.title
+        } else if (validation.status === 'missing' && confidence === 'confirmed') {
+          // A user may deliberately confirm a show even if TMDB cannot represent its episode
+          // numbering (for example, daily shows with calendar-season release names). Keep the
+          // filename's explicit number and leave a non-blocking validation note instead.
+          row.episodeValidation = 'unvalidated'
+          row.matchReasons.push('Manual assignment accepts the episode number from the filename')
         } else row.error = validation.reason
       }
     } catch (error) {
@@ -304,13 +310,18 @@ export function useMediaPlan(
     refreshState(row)
   }
 
-  async function selectMatch(row: PlanRow, match: TmdbResult): Promise<void> {
+  async function selectMatch(
+    row: PlanRow,
+    match: TmdbResult,
+    applyToMatchingEpisodes = true,
+  ): Promise<void> {
     const group =
-      row.kind === 'series'
+      row.kind === 'series' && applyToMatchingEpisodes
         ? rows.value.filter(
             (other) =>
-              other.groupKey === row.groupKey &&
+              other.kind === 'series' &&
               other.state !== 'done' &&
+              other.title.toLocaleLowerCase() === row.title.toLocaleLowerCase() &&
               (!other.ids.length || JSON.stringify(other.ids) === JSON.stringify(row.ids)),
           )
         : [row]
