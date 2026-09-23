@@ -1,8 +1,21 @@
 import type { MediaKind, ParsedMedia } from '../lib/media'
 import type { TmdbResult } from '../lib/tmdb'
 
-export type RowState = 'ready' | 'conflict' | 'unrecognized' | 'needs-choice' | 'error' | 'done'
-export type PlanFilter = 'all' | 'ready' | 'conflict' | 'needs-choice' | 'unrecognized'
+export type RowState =
+  | 'ready'
+  | 'already-named'
+  | 'conflict'
+  | 'unrecognized'
+  | 'needs-choice'
+  | 'error'
+  | 'done'
+export type PlanFilter =
+  | 'all'
+  | 'ready'
+  | 'already-named'
+  | 'conflict'
+  | 'needs-choice'
+  | 'unrecognized'
 
 export interface FoundFile {
   name: string

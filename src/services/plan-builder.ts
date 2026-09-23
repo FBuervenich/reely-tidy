@@ -193,6 +193,16 @@ export function companionTargetName(row: PlanRow, original: FoundFile | string):
   return `${targetName.replace(/\.[^.]+$/, '')}${qualifier}.${extensionOf(originalName)}`
 }
 
+/** True only when every file in a row already has its planned output filename. */
+export function hasPlannedOutputNames(row: PlanRow): boolean {
+  const targetName = row.target.split('/').pop()
+  return Boolean(
+    targetName &&
+    row.source.name === targetName &&
+    row.sidecars.every((sidecar) => sidecar.name === companionTargetName(row, sidecar)),
+  )
+}
+
 export function detectDuplicateTargets(rows: PlanRow[]): void {
   for (const row of rows)
     if (row.state === 'conflict') {
@@ -203,7 +213,7 @@ export function detectDuplicateTargets(rows: PlanRow[]): void {
   for (const row of rows) {
     if (
       !row.enabled ||
-      ['unrecognized', 'needs-choice', 'error', 'done'].includes(row.state) ||
+      ['unrecognized', 'needs-choice', 'error', 'done', 'already-named'].includes(row.state) ||
       !row.target
     )
       continue

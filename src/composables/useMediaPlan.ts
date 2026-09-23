@@ -13,6 +13,7 @@ import {
   companionTargetName,
   createPlan,
   detectDuplicateTargets,
+  hasPlannedOutputNames,
   rebuildTarget,
   type BaseFolders,
 } from '../services/plan-builder'
@@ -154,6 +155,7 @@ export function useMediaPlan(
           (row.kindOverride === 'series' && (row.season === undefined || !row.episodes?.length))))
     )
       row.state = 'needs-choice'
+    else if (row.target && row.match && hasPlannedOutputNames(row)) row.state = 'already-named'
     else row.state = row.target ? 'ready' : 'unrecognized'
   }
 

@@ -54,6 +54,17 @@ describe('review and correction workflows', () => {
     expect(row.searching).toBe(false)
   })
 
+  it('skips a matched file whose video and sidecars already use the output names', async () => {
+    const fetch = vi.fn(async () => response({ id: 1, title: 'Dune', release_date: '2021-01-01' }))
+    vi.stubGlobal('fetch', fetch)
+    const plan = setupPlan(['Dune (2021).mkv', 'Dune (2021).eng.srt'])
+
+    await plan.selectMatch(plan.rows.value[0], { id: 1, title: 'Dune', year: 2021 })
+
+    expect(plan.rows.value[0]).toMatchObject({ state: 'already-named', enabled: true })
+    expect(plan.readyCount.value).toBe(0)
+  })
+
   it('preserves an existing match if a manual search fails', async () => {
     const fetch = vi.fn(async () => response({ id: 1, title: 'Dune' }))
     vi.stubGlobal('fetch', fetch)

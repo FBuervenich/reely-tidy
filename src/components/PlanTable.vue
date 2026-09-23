@@ -19,12 +19,14 @@ const emit = defineEmits<{
 const filters: { value: PlanFilter; label: string }[] = [
   { value: 'all', label: 'All' },
   { value: 'ready', label: 'Ready' },
+  { value: 'already-named', label: 'Already named' },
   { value: 'conflict', label: 'Conflict' },
   { value: 'needs-choice', label: 'Selection required' },
   { value: 'unrecognized', label: 'Unrecognized' },
 ]
 const statusLabels = {
   ready: 'Ready',
+  'already-named': 'Already named',
   conflict: 'Conflict',
   unrecognized: 'Unrecognized',
   'needs-choice': 'Selection required',
@@ -396,7 +398,9 @@ async function copyDestination(target: string): Promise<void> {
             </td>
             <td>
               <span class="status" :class="row.state">{{ statusLabels[row.state] }}</span
-              ><small v-if="row.error">{{ row.error }}</small>
+              ><small v-if="row.state === 'already-named'"
+                >Matches the output naming and will be left in place.</small
+              ><small v-else-if="row.error">{{ row.error }}</small>
             </td>
           </tr>
         </tbody>

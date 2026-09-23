@@ -580,6 +580,10 @@ dialog input:focus {
   background: #193c32;
   color: #7ce0b4;
 }
+.status.already-named {
+  background: #273852;
+  color: #a9c9f3;
+}
 .status.done {
   background: #163955;
   color: #78bcf8;
@@ -1673,6 +1677,10 @@ dialog input:focus,
 .status.ready {
   background: #e0f5ec;
   color: var(--green);
+}
+.status.already-named {
+  background: #e7efff;
+  color: #375ba2;
 }
 .status.done {
   background: #e7efff;
