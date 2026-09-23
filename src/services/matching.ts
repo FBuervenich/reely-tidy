@@ -78,7 +78,21 @@ export function scoreCandidate(parsed: ParsedMedia, candidate: TmdbResult): Tmdb
 }
 export function automaticMatch(candidates: TmdbResult[]): TmdbResult | undefined {
   const [first, second] = candidates
-  if (!first || (first.score ?? 0) < 65 || first.contradictions?.length) return undefined
+  // A broken or stale ID in an NFO is useful context, but must not outweigh an
+  // otherwise unambiguous title-and-year match.  Actual ID disagreements (and
+  // all other contradictions) remain blocking.
+  const blockingContradictions = (first?.contradictions ?? []).filter(
+    (reason) => reason !== 'Provider ID could not be resolved',
+  )
+  if (!first || (first.score ?? 0) < 65 || blockingContradictions.length) return undefined
+  // TMDB can contain duplicate records with the same exact title and release
+  // year. The filename cannot distinguish them, so prefer TMDB's ranked first
+  // result rather than needlessly blocking an otherwise exact match.
+  if (
+    first.reasons?.includes('Exact title or alternative title') &&
+    first.reasons?.includes('Year matches')
+  )
+    return first
   const runnerUpScore = (second?.score ?? 0) + (second?.episodeStatus === 'unvalidated' ? 20 : 0)
   if ((first.score ?? 0) - runnerUpScore < 20) return undefined
   return first.reasons?.some(
@@ -128,14 +142,14 @@ export async function findCandidates(parsed: ParsedMedia, token: string): Promis
       }
     }
     const evaluated = await evaluateCandidates(parsed, [...found.values()], token)
+    const verified = [...found.values()].filter((item) => item.verifiedId)
     for (const candidate of evaluated) {
-      if (
-        parsed.ids.length &&
-        (idUnresolved ||
-          !candidate.verifiedId ||
-          [...found.values()].filter((item) => item.verifiedId).length > 1)
-      )
-        candidate.contradictions!.push('Provider ID is unresolved or disagrees with this candidate')
+      if (!parsed.ids.length) continue
+      if (verified.length > 1)
+        candidate.contradictions!.push('Provider IDs resolve to different candidates')
+      else if (verified.length === 1 && !candidate.verifiedId)
+        candidate.contradictions!.push('Provider ID resolves to a different candidate')
+      else if (idUnresolved) candidate.contradictions!.push('Provider ID could not be resolved')
     }
     return evaluated
   }

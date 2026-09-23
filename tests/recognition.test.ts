@@ -228,6 +228,26 @@ describe('context and candidate evidence', () => {
       ]),
     ).toBeUndefined()
   })
+  it('accepts a unique exact title/year match despite an unresolved provider ID', () => {
+    const parsed = parseMediaName('Dune.2021.mkv')
+    const match = scoreCandidate(parsed, { id: 1, title: 'Dune', year: 2021 })
+    match.contradictions!.push('Provider ID could not be resolved')
+    expect(automaticMatch([match])?.id).toBe(1)
+  })
+  it('uses the TMDB-ranked result for duplicate exact title/year matches', () => {
+    const parsed = parseMediaName('The.Planet.2006.mkv')
+    const matches = [
+      { id: 1, title: 'The Planet', year: 2006 },
+      { id: 2, title: 'The Planet', year: 2006 },
+    ].map((candidate) => scoreCandidate(parsed, candidate))
+    expect(automaticMatch(matches)?.id).toBe(1)
+  })
+  it('keeps a title/year match reviewable when a provider ID identifies another title', () => {
+    const parsed = parseMediaName('Dune.2021.mkv')
+    const match = scoreCandidate(parsed, { id: 1, title: 'Dune', year: 2021 })
+    match.contradictions!.push('Provider ID resolves to a different candidate')
+    expect(automaticMatch([match])).toBeUndefined()
+  })
 })
 
 describe('TMDB strategy and validation', () => {
@@ -270,6 +290,26 @@ describe('TMDB strategy and validation', () => {
       fetch.mock.calls.some(([url]) => url.includes('/find/tt1160419?external_source=imdb_id')),
     ).toBe(true)
     expect(fetch.mock.calls.some(([url]) => url.includes('/search/'))).toBe(false)
+  })
+  it('uses an exact filename match when a provider ID cannot be resolved', async () => {
+    const fetch = vi.fn(async (url: string) =>
+      response(
+        url.includes('/find/')
+          ? { movie_results: [], tv_results: [] }
+          : url.includes('/search/')
+            ? { results: [{ id: 1, title: 'Dune', release_date: '2021-01-01' }] }
+            : {
+                id: 1,
+                title: 'Dune',
+                release_date: '2021-01-01',
+                alternative_titles: { titles: [] },
+              },
+      ),
+    )
+    vi.stubGlobal('fetch', fetch)
+    const candidates = await findCandidates(parseMediaName('Dune.2021.tt1160419.mkv'), 'token')
+    expect(candidates[0].contradictions).toContain('Provider ID could not be resolved')
+    expect(automaticMatch(candidates)?.id).toBe(1)
   })
   it('deduplicates simultaneous and completed requests', async () => {
     const fetch = vi.fn(async () => response({ results: [] }))
