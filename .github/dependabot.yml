@@ -9,6 +9,10 @@ updates:
         patterns:
           - '*'
     open-pull-requests-limit: 10
+    ignore:
+      # vue-tsc requires the JavaScript compiler API, unavailable in TypeScript 7.
+      - dependency-name: typescript
+        versions: ['>=7.0.0']
 
   - package-ecosystem: github-actions
     directory: /
